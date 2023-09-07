@@ -2,8 +2,8 @@
 
 
 ![pcb_front_3d.png](Hardware%2FV1.0%2Fpcb_front_3d.png)
-![pcb_back_3d.png](Hardware%2FV1.0%2Fpcb_back_3d.png)
 
+---
 ## Specifications:
 - Up to 60V input
 - 70A Continuous current, 150A Peak
