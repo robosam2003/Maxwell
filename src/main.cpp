@@ -1,6 +1,6 @@
-#include <Arduino.h>
+#include <Arduino.h> 
 #include "pin_definitions.h"
-
+#include "Maxwell.h"
 
 void JumpToBootloader(void) {
     void (*SysMemBootJump)(void);
@@ -87,7 +87,6 @@ void JumpToBootloader(void) {
 void setup() {
 // write your initialization code here
     SerialUSB.begin(115200);
-    pinMode(PC1, OUTPUT);
     pinMode(GREEN_LED_PIN, OUTPUT);
 }
 
@@ -104,7 +103,6 @@ void loop() {
             SerialUSB.printf("Magic Number %s does not match %s\n", magic, BOOTLOADER_MAGIC_NUMBER);
         }
     }
-    digitalToggle(PC1);
     digitalToggle(GREEN_LED_PIN);
-    delay(300);
+    delay(100);
 }
