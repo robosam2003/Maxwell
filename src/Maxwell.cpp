@@ -3,3 +3,5 @@
 //
 
 #include "Maxwell.h"
+
+Maxwell::Maxwell() = default;

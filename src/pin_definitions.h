@@ -28,7 +28,7 @@
 #define DRV8323_HI_C_PIN            PA1
 #define DRV8323_LO_A_PIN            PB15
 #define DRV8323_LO_B_PIN            PA2
-#define DRV8323_LO_C_PIN
+#define DRV8323_LO_C_PIN            PB8
 
 #define DRV8323_CURR_SENSE_A_PIN    PB1
 #define DRV8323_CURR_SENSE_B_PIN    PC5

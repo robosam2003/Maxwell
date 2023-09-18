@@ -7,7 +7,14 @@
 
 
 class Maxwell {
-    
+private:
+
+public:
+    Maxwell(); // Constructor
+
+    void setup();
+
+
 
 };
 

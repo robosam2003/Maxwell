@@ -84,25 +84,121 @@ void JumpToBootloader(void) {
 
 #define BOOTLOADER_MAGIC_NUMBER "4242"
 
-void setup() {
-// write your initialization code here
-    SerialUSB.begin(115200);
-    pinMode(GREEN_LED_PIN, OUTPUT);
+
+void start_up_noise() {
+
 }
 
-void loop() {
-// write your code here
-    if (SerialUSB.available() >= 4) {
-        char magic[5];
-        SerialUSB.readBytes(magic, 4);
-        magic[4] = '\0';  // String terminator
-        if (strcmp(magic, BOOTLOADER_MAGIC_NUMBER) == 0) {
-            SerialUSB.printf("Magic Number %s matches %s\n", magic, BOOTLOADER_MAGIC_NUMBER);
-            JumpToBootloader();
-        } else {
-            SerialUSB.printf("Magic Number %s does not match %s\n", magic, BOOTLOADER_MAGIC_NUMBER);
-        }
+void setup() {
+// write your initialization code here
+    SerialUSB.begin(9600);
+    pinMode(GREEN_LED_PIN, OUTPUT);
+    pinMode(DRV8323_HI_A_PIN, OUTPUT);
+    pinMode(DRV8323_HI_B_PIN, OUTPUT);
+    pinMode(DRV8323_HI_C_PIN, OUTPUT);
+    pinMode(DRV8323_LO_A_PIN, OUTPUT);
+    pinMode(DRV8323_LO_B_PIN, OUTPUT);
+    pinMode(DRV8323_LO_C_PIN, OUTPUT);
+
+    pinMode(DRV8323_GATE_EN_PIN, OUTPUT);
+    pinMode(DRV8323_DRIVE_CAL_PIN, OUTPUT);
+
+    digitalWrite(DRV8323_DRIVE_CAL_PIN, LOW);
+
+
+}
+
+
+void sense_print_voltages() {
+    uint32_t v_a = analogRead(V_SENSE_A_PIN);
+    uint32_t v_b = analogRead(V_SENSE_B_PIN);
+    uint32_t v_c = analogRead(V_SENSE_C_PIN);
+    uint32_t v_supply = analogRead(V_SUPPLY_SENSE_PIN);
+
+    // Convert to voltages:
+    float v_a_v = v_a * SENSE_CONVERSION_FACTOR;
+    float v_b_v = v_b * SENSE_CONVERSION_FACTOR;
+    float v_c_v = v_c * SENSE_CONVERSION_FACTOR;
+    float v_supply_v = v_supply * SENSE_CONVERSION_FACTOR;
+
+    // Print the voltages:
+    SerialUSB.print(v_a_v); SerialUSB.print(" ");
+    SerialUSB.print(v_b_v); SerialUSB.print(" ");
+    SerialUSB.print(v_c_v); SerialUSB.print(" ");
+    SerialUSB.println(v_supply_v);
+}
+
+void sense_print_currents() {
+    uint32_t i_a = analogRead(DRV8323_CURR_SENSE_A_PIN);
+    uint32_t i_b = analogRead(DRV8323_CURR_SENSE_B_PIN);
+    uint32_t i_c = analogRead(DRV8323_CURR_SENSE_C_PIN);
+
+    // Convert to voltages:
+    double i_a_v = (double)i_a * SENSE_CONVERSION_FACTOR;
+    double i_b_v = (double)i_b * SENSE_CONVERSION_FACTOR;
+    double i_c_v = (double)i_c * SENSE_CONVERSION_FACTOR;
+
+    // Print the voltages:
+    SerialUSB.print(i_a_v); SerialUSB.print(" ");
+    SerialUSB.print(i_b_v); SerialUSB.print(" ");
+    SerialUSB.print(i_c_v); SerialUSB.print(" ");
+    SerialUSB.println();
+}
+
+
+
+uint8_t six_step_commutation_states[6][6] = {  // AH, AL, BH, BL, CH, CL
+        {1, 0, 0, 0, 0, 1},
+        {0, 0, 1, 0, 0, 1},
+        {0, 1, 1, 0, 0, 0},
+        {0, 1, 0, 0, 1, 0},
+        {0, 0, 0, 1, 1, 0},
+        {1, 0, 0, 1, 0, 0},
+};
+
+
+
+void six_step_commutation_loop(int del, int level) {
+
+
+    for (int i = 0; i < 6; i++) {
+        analogWrite(DRV8323_HI_A_PIN, level * six_step_commutation_states[i][0]);
+        analogWrite(DRV8323_LO_A_PIN, level * six_step_commutation_states[i][1]);
+        analogWrite(DRV8323_HI_B_PIN, level * six_step_commutation_states[i][2]);
+        analogWrite(DRV8323_LO_B_PIN, level * six_step_commutation_states[i][3]);
+        analogWrite(DRV8323_HI_C_PIN, level * six_step_commutation_states[i][4]);
+        analogWrite(DRV8323_LO_C_PIN, level * six_step_commutation_states[i][5]);
+        sense_print_currents();
+        delay(del);
     }
-    digitalToggle(GREEN_LED_PIN);
-    delay(100);
+
+
+}
+
+//void ramp_run_ramp() {
+//    int level = 25;
+//    for (int i=0; i<255; i++) {
+//        six_step_commutation_loop(200 - i, level);
+//    }
+//    for (int i = 255; i > 0; i--) {
+//        six_step_commutation_loop(200 - i, level);
+//    }
+//
+//}
+
+
+void loop() {
+    digitalWrite(DRV8323_GATE_EN_PIN, HIGH);
+    digitalWrite(GREEN_LED_PIN, HIGH);
+
+    for (int i = 0; i < 10; i++) {
+        six_step_commutation_loop(15-i, 25);
+    }
+    for (int i = 0; i < 50; i++) {
+        six_step_commutation_loop(2, 25);
+    }
+    digitalWrite(DRV8323_GATE_EN_PIN, LOW);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    delay(2000);
+
 }
