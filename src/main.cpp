@@ -1,6 +1,8 @@
 #include <Arduino.h> 
 #include "pin_definitions.h"
 #include "Maxwell.h"
+#include "DRV8323.h"
+#include "AS5047P.h"
 
 void JumpToBootloader(void) {
     void (*SysMemBootJump)(void);
@@ -84,10 +86,13 @@ void JumpToBootloader(void) {
 
 #define BOOTLOADER_MAGIC_NUMBER "4242"
 
+SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
+SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
 
-void start_up_noise() {
+DRV8323::DRV8323 drv8323(DRV8323_CS_PIN, SPI_1, 1000000);
 
-}
+//SPIProtocol as5047p(AS5047P_CS_PIN, SPI_2, SPISettings(4000000, MSBFIRST, SPI_MODE1), 0x4000, 0x0000, 16);
+
 
 void setup() {
 // write your initialization code here
@@ -105,8 +110,11 @@ void setup() {
 
     digitalWrite(DRV8323_DRIVE_CAL_PIN, LOW);
 
+    drv8323.default_configuration(); // set up the gate driver
 
 }
+
+
 
 
 void sense_print_voltages() {
@@ -129,19 +137,23 @@ void sense_print_voltages() {
 }
 
 void sense_print_currents() {
-    uint32_t i_a = analogRead(DRV8323_CURR_SENSE_A_PIN);
-    uint32_t i_b = analogRead(DRV8323_CURR_SENSE_B_PIN);
-    uint32_t i_c = analogRead(DRV8323_CURR_SENSE_C_PIN);
+    float G = 20;
+    float R_sense = 0.4e-3;
+    float VREF = 3.3;
+    auto V_SOa = ((double) analogRead(DRV8323_CURR_SENSE_A_PIN)) * CURRENT_SENSE_CONVERSION_FACTOR;
+    auto V_SOb = ((double) analogRead(DRV8323_CURR_SENSE_B_PIN)) * CURRENT_SENSE_CONVERSION_FACTOR;
+    auto V_SOc = ((double) analogRead(DRV8323_CURR_SENSE_C_PIN)) * CURRENT_SENSE_CONVERSION_FACTOR;
 
-    // Convert to voltages:
-    double i_a_v = (double)i_a * SENSE_CONVERSION_FACTOR;
-    double i_b_v = (double)i_b * SENSE_CONVERSION_FACTOR;
-    double i_c_v = (double)i_c * SENSE_CONVERSION_FACTOR;
+    // Convert to currents:
+    double i_a = ((VREF/2 - V_SOa) / (G * R_sense)) - 206;
+    double i_b = ((VREF/2 - V_SOb) / (G * R_sense)) - 139;
+    double i_c = ((VREF/2 - V_SOc) / (G * R_sense)) - 110;
+
 
     // Print the voltages:
-    SerialUSB.print(i_a_v); SerialUSB.print(" ");
-    SerialUSB.print(i_b_v); SerialUSB.print(" ");
-    SerialUSB.print(i_c_v); SerialUSB.print(" ");
+    SerialUSB.print(i_a); SerialUSB.print(" ");
+    SerialUSB.print(i_b); SerialUSB.print(" ");
+    SerialUSB.print(i_c); SerialUSB.print(" ");
     SerialUSB.println();
 }
 
@@ -156,49 +168,64 @@ uint8_t six_step_commutation_states[6][6] = {  // AH, AL, BH, BL, CH, CL
         {1, 0, 0, 1, 0, 0},
 };
 
+void delayWhileRunningFunction(int del, void (*func)()) {
+    uint32_t start = millis();
+    while (millis() - start < del) {
+        func();
+    }
+}
 
 
 void six_step_commutation_loop(int del, int level) {
 
+}
 
-    for (int i = 0; i < 6; i++) {
-        analogWrite(DRV8323_HI_A_PIN, level * six_step_commutation_states[i][0]);
-        analogWrite(DRV8323_LO_A_PIN, level * six_step_commutation_states[i][1]);
-        analogWrite(DRV8323_HI_B_PIN, level * six_step_commutation_states[i][2]);
-        analogWrite(DRV8323_LO_B_PIN, level * six_step_commutation_states[i][3]);
-        analogWrite(DRV8323_HI_C_PIN, level * six_step_commutation_states[i][4]);
-        analogWrite(DRV8323_LO_C_PIN, level * six_step_commutation_states[i][5]);
-        sense_print_currents();
-        delay(del);
-    }
 
+void low_side_on() {
+    digitalWrite(DRV8323_GATE_EN_PIN, HIGH);
+    digitalWrite(GREEN_LED_PIN, HIGH);
+    digitalWrite(DRV8323_HI_A_PIN, LOW);
+    digitalWrite(DRV8323_LO_A_PIN, HIGH);
+    digitalWrite(DRV8323_HI_B_PIN, LOW);
+    digitalWrite(DRV8323_LO_B_PIN, HIGH);
+    digitalWrite(DRV8323_HI_C_PIN, LOW);
+    digitalWrite(DRV8323_LO_C_PIN, HIGH);
 
 }
 
-//void ramp_run_ramp() {
-//    int level = 25;
-//    for (int i=0; i<255; i++) {
-//        six_step_commutation_loop(200 - i, level);
-//    }
-//    for (int i = 255; i > 0; i--) {
-//        six_step_commutation_loop(200 - i, level);
-//    }
-//
-//}
+
 
 
 void loop() {
-    digitalWrite(DRV8323_GATE_EN_PIN, HIGH);
-    digitalWrite(GREEN_LED_PIN, HIGH);
+//    digitalWrite(DRV8323_GATE_EN_PIN, HIGH);
+//    digitalWrite(GREEN_LED_PIN, HIGH);//
+//    for (int i = 0; i < 20; i++) {
+//        digitalWrite(GREEN_LED_PIN, HIGH);
+//        six_step_commutation_loop(20, 25);
+//        digitalWrite(GREEN_LED_PIN, LOW);
+//    }
+//    digitalWrite(DRV8323_GATE_EN_PIN, LOW);
+//    digitalWrite(GREEN_LED_PIN, LOW);
+//    delay(2000);
 
-    for (int i = 0; i < 10; i++) {
-        six_step_commutation_loop(15-i, 25);
-    }
-    for (int i = 0; i < 50; i++) {
-        six_step_commutation_loop(2, 25);
-    }
-    digitalWrite(DRV8323_GATE_EN_PIN, LOW);
-    digitalWrite(GREEN_LED_PIN, LOW);
-    delay(2000);
+//    uint16_t gate_drive_hs = drv8323.get_gate_drive_hs();
+//    SerialUSB.println(gate_drive_hs, BIN);
+//    uint16_t ocp_control = drv8323.get_gate_drive_hs();
+//    SerialUSB.println(ocp_control, BIN);
+//    delay(10);
 
+
+//    digitalWrite(DRV8323_HI_A_PIN, LOW);
+//    digitalWrite(DRV8323_LO_A_PIN, LOW);
+//    digitalWrite(DRV8323_HI_B_PIN, HIGH);
+//    digitalWrite(DRV8323_LO_B_PIN, LOW);
+//    digitalWrite(DRV8323_HI_C_PIN, LOW);
+//    digitalWrite(DRV8323_LO_C_PIN, HIGH);
+//
+//    delay(1000);
+//    drv8323.enable(true);
+
+    uint16_t a = drv8323.read_reg(DRV8323::REGISTER::OCP_CONTROL);
+    SerialUSB.println(a, BIN);
+    delay(100);
 }
