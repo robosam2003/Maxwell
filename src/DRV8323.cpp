@@ -87,17 +87,16 @@ namespace DRV8323 {
 
     void DRV8323::set_pwm_mode(PWM_MODE mode) {
         uint16_t data = read_reg(REGISTER::DRIVER_CONTROL);
-        data = data & 0b11110011111;
-        data = data | (mode << 5);
+        data = data & 0b11110011111; // Mask the PWM_MODE bits
+        data = data | (mode << 5);   // Set the PWM_MODE bits
         write_reg(REGISTER::DRIVER_CONTROL, data);
     }
 
     void DRV8323::default_configuration() {
         enable(true);
-        set_pwm_mode(PWM_MODE::PWM_1x);
+        set_pwm_mode(PWM_MODE::PWM_INDEPENDENT);
     }
 
-    void
 
 
 } // namespace DRV8323

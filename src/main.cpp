@@ -157,17 +157,6 @@ void sense_print_currents() {
     SerialUSB.println();
 }
 
-
-
-uint8_t six_step_commutation_states[6][6] = {  // AH, AL, BH, BL, CH, CL
-        {1, 0, 0, 0, 0, 1},
-        {0, 0, 1, 0, 0, 1},
-        {0, 1, 1, 0, 0, 0},
-        {0, 1, 0, 0, 1, 0},
-        {0, 0, 0, 1, 1, 0},
-        {1, 0, 0, 1, 0, 0},
-};
-
 void delayWhileRunningFunction(int del, void (*func)()) {
     uint32_t start = millis();
     while (millis() - start < del) {
@@ -176,56 +165,55 @@ void delayWhileRunningFunction(int del, void (*func)()) {
 }
 
 
-void six_step_commutation_loop(int del, int level) {
+uint8_t six_step_commutation_states[6][3] = {
+        {HIGH, HIGH, LOW},
+        {HIGH, LOW, LOW},
+        {HIGH, LOW, HIGH},
+        {LOW, LOW, HIGH},
+        {LOW, HIGH, HIGH},
+        {LOW, HIGH, LOW}
+};
 
+void six_step_commutation_loop(int del, int level, int num_loops) {
+    analogWrite(DRV8323_PWM1X_PIN, level); // Set the PWM duty cycle on the INHA pin
+    digitalWrite(DRV8323_BRAKE_PIN, HIGH); // set the brake pin to high - disables brake.
+    digitalWrite(DRV8323_DIR_PIN, LOW); // set the direction pin to high
+
+    // STOP and align procedure
+    // STOP
+    digitalWrite(DRV8323_STATE0_PIN, LOW);
+    digitalWrite(DRV8323_STATE1_PIN, LOW);
+    digitalWrite(DRV8323_STATE2_PIN, LOW);
+    delay(3*del);
+
+    // ALIGN
+    digitalWrite(DRV8323_STATE0_PIN, HIGH);
+    digitalWrite(DRV8323_STATE1_PIN, HIGH);
+    digitalWrite(DRV8323_STATE2_PIN, HIGH);
+    delay(10*del);
+
+
+    for (int i = 0; i < num_loops; i++) {
+        for (int j = 0; j < 6; j++) {
+            digitalWrite(DRV8323_STATE0_PIN, six_step_commutation_states[j][0]);
+            digitalWrite(DRV8323_STATE1_PIN, six_step_commutation_states[j][1]);
+            digitalWrite(DRV8323_STATE2_PIN, six_step_commutation_states[j][2]);
+            sense_print_currents();
+            delay(del);
+        }
+    }
 }
-
-
-void low_side_on() {
-    digitalWrite(DRV8323_GATE_EN_PIN, HIGH);
-    digitalWrite(GREEN_LED_PIN, HIGH);
-    digitalWrite(DRV8323_HI_A_PIN, LOW);
-    digitalWrite(DRV8323_LO_A_PIN, HIGH);
-    digitalWrite(DRV8323_HI_B_PIN, LOW);
-    digitalWrite(DRV8323_LO_B_PIN, HIGH);
-    digitalWrite(DRV8323_HI_C_PIN, LOW);
-    digitalWrite(DRV8323_LO_C_PIN, HIGH);
-
-}
-
-
 
 
 void loop() {
-//    digitalWrite(DRV8323_GATE_EN_PIN, HIGH);
-//    digitalWrite(GREEN_LED_PIN, HIGH);//
-//    for (int i = 0; i < 20; i++) {
-//        digitalWrite(GREEN_LED_PIN, HIGH);
-//        six_step_commutation_loop(20, 25);
-//        digitalWrite(GREEN_LED_PIN, LOW);
-//    }
-//    digitalWrite(DRV8323_GATE_EN_PIN, LOW);
-//    digitalWrite(GREEN_LED_PIN, LOW);
+//    six_step_commutation_loop(50, 150, 50);
 //    delay(2000);
 
-//    uint16_t gate_drive_hs = drv8323.get_gate_drive_hs();
-//    SerialUSB.println(gate_drive_hs, BIN);
-//    uint16_t ocp_control = drv8323.get_gate_drive_hs();
-//    SerialUSB.println(ocp_control, BIN);
-//    delay(10);
-
-
-//    digitalWrite(DRV8323_HI_A_PIN, LOW);
-//    digitalWrite(DRV8323_LO_A_PIN, LOW);
-//    digitalWrite(DRV8323_HI_B_PIN, HIGH);
-//    digitalWrite(DRV8323_LO_B_PIN, LOW);
-//    digitalWrite(DRV8323_HI_C_PIN, LOW);
-//    digitalWrite(DRV8323_LO_C_PIN, HIGH);
-//
-//    delay(1000);
-//    drv8323.enable(true);
-
-    uint16_t a = drv8323.read_reg(DRV8323::REGISTER::OCP_CONTROL);
-    SerialUSB.println(a, BIN);
+    uint16_t f1 = drv8323.read_reg(DRV8323::REGISTER::FAULT_STATUS_1);
+    uint16_t f2 = drv8323.read_reg(DRV8323::REGISTER::VGS_STATUS_2);
+    SerialUSB.print("F1: ");
+    SerialUSB.println(f1, BIN);
+    SerialUSB.print("F2: ");
+    SerialUSB.println(f2, BIN);
     delay(100);
 }

@@ -40,7 +40,7 @@ public:
 
     void set_pwm_mode(PWM_MODE mode);
 
-    void default_configuration()
+    void default_configuration();
 
 
 
