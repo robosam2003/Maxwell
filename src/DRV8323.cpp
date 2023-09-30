@@ -95,8 +95,30 @@ namespace DRV8323 {
     void DRV8323::default_configuration() {
         enable(true);
         set_pwm_mode(PWM_MODE::PWM_INDEPENDENT);
+        enable_CPUV_Fault(false);
+        enable_GDF(false);
+        set_SYNC_rectification(true);
     }
 
+    void DRV8323::enable_CPUV_Fault(bool enable) {
+        uint16_t data = read_reg(REGISTER::DRIVER_CONTROL);
+        setBit(&data, 9, enable ? 0 : 1);
+        write_reg(REGISTER::DRIVER_CONTROL, data);
+    }
+
+    void DRV8323::enable_GDF(bool enable) {
+        uint16_t data = read_reg(REGISTER::DRIVER_CONTROL);
+        setBit(&data, 3, enable ? 0 : 1);
+        write_reg(REGISTER::DRIVER_CONTROL, data);
+
+    }
+
+    void DRV8323::set_SYNC_rectification(bool enable) {
+        uint16_t data = read_reg(REGISTER::DRIVER_CONTROL);
+        setBit(&data, 8, enable ? 0 : 1);
+        write_reg(REGISTER::DRIVER_CONTROL, data);
+
+    }
 
 
 } // namespace DRV8323

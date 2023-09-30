@@ -175,22 +175,23 @@ uint8_t six_step_commutation_states[6][3] = {
 };
 
 void six_step_commutation_loop(int del, int level, int num_loops) {
-    analogWrite(DRV8323_PWM1X_PIN, level); // Set the PWM duty cycle on the INHA pin
     digitalWrite(DRV8323_BRAKE_PIN, HIGH); // set the brake pin to high - disables brake.
     digitalWrite(DRV8323_DIR_PIN, LOW); // set the direction pin to high
+
 
     // STOP and align procedure
     // STOP
     digitalWrite(DRV8323_STATE0_PIN, LOW);
     digitalWrite(DRV8323_STATE1_PIN, LOW);
     digitalWrite(DRV8323_STATE2_PIN, LOW);
-    delay(3*del);
 
-    // ALIGN
+//    // ALIGN
     digitalWrite(DRV8323_STATE0_PIN, HIGH);
     digitalWrite(DRV8323_STATE1_PIN, HIGH);
     digitalWrite(DRV8323_STATE2_PIN, HIGH);
-    delay(10*del);
+    delay(500);
+
+    analogWrite(DRV8323_PWM1X_PIN, level); // set the pwm pin to the pwm level
 
 
     for (int i = 0; i < num_loops; i++) {
@@ -198,22 +199,27 @@ void six_step_commutation_loop(int del, int level, int num_loops) {
             digitalWrite(DRV8323_STATE0_PIN, six_step_commutation_states[j][0]);
             digitalWrite(DRV8323_STATE1_PIN, six_step_commutation_states[j][1]);
             digitalWrite(DRV8323_STATE2_PIN, six_step_commutation_states[j][2]);
+            sense_print_voltages();
             sense_print_currents();
             delay(del);
         }
     }
+
+
+    digitalWrite(DRV8323_STATE0_PIN, LOW);
+    digitalWrite(DRV8323_STATE1_PIN, LOW);
+    digitalWrite(DRV8323_STATE2_PIN, LOW);
+    delay(3*del);
 }
 
 
 void loop() {
-//    six_step_commutation_loop(50, 150, 50);
-//    delay(2000);
+    six_step_commutation_loop(30, 20, 10);
+    SerialUSB.println(drv8323.get_fault_status_1(), BIN);
+    SerialUSB.println(drv8323.get_fault_status_2(), BIN);
+    delay(2000);
 
-    uint16_t f1 = drv8323.read_reg(DRV8323::REGISTER::FAULT_STATUS_1);
-    uint16_t f2 = drv8323.read_reg(DRV8323::REGISTER::VGS_STATUS_2);
-    SerialUSB.print("F1: ");
-    SerialUSB.println(f1, BIN);
-    SerialUSB.print("F2: ");
-    SerialUSB.println(f2, BIN);
-    delay(100);
+
+
+
 }

@@ -40,6 +40,12 @@ public:
 
     void set_pwm_mode(PWM_MODE mode);
 
+    void set_SYNC_rectification(bool enable);
+
+    void enable_CPUV_Fault(bool enable);
+
+    void enable_GDF(bool enable);
+
     void default_configuration();
 
 
