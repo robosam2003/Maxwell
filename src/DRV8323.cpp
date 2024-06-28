@@ -18,7 +18,7 @@ namespace DRV8323 {
     }
 
 
-    // constructor
+    // Constructor
     DRV8323::DRV8323(byte CS, SPIClass &spi, uint32_t spiFreq) {
         _CS = CS;
         _spi = spi;
@@ -65,7 +65,7 @@ namespace DRV8323 {
         return result;
     }
 
-    void DRV8323::write_reg(REGISTER regAddress, uint16_t data) {
+    void DRV8323::write_reg(REGISTER regAddress, uint16_t data) {  // Any way to get feedback from this?
         uint16_t word = _WRITE_WORD | (regAddress << ((word_length - 1) - address_length)) | data; // Set up the address byte
 
         _spi.beginTransaction(_settings); // Begin the SPI transaction
@@ -81,8 +81,87 @@ namespace DRV8323 {
         return read_reg(REGISTER::FAULT_STATUS_1);
     }
 
+    String DRV8323::get_fault_status_1_string() {
+        uint16_t fault_code = get_fault_status_1();
+        String fault_string = "";
+        if (getBit(fault_code, 0)) {
+            fault_string += "VDS_LC ";
+        }
+        if (getBit(fault_code, 1)) {
+            fault_string += "VDS_HC ";
+        }
+        if (getBit(fault_code, 2)) {
+            fault_string += "VDS_LB ";
+        }
+        if (getBit(fault_code, 3)) {
+            fault_string += "VDS_HB ";
+        }
+        if (getBit(fault_code, 4)) {
+            fault_string += "VDS_LA ";
+        }
+        if (getBit(fault_code, 5)) {
+            fault_string += "VDS_HA ";
+        }
+        if (getBit(fault_code, 6)) {
+            fault_string += "OTSD ";
+        }
+        if (getBit(fault_code, 7)) {
+            fault_string += "UVLO ";
+        }
+        if (getBit(fault_code, 8)) {
+            fault_string += "GDF ";
+        }
+        if (getBit(fault_code, 9)) {
+            fault_string += "VDS_OCP ";
+        }
+        if (getBit(fault_code, 10)) {
+            fault_string += "FAULT ";
+        }
+        return fault_string;
+    }
+
+
     uint16_t DRV8323::get_fault_status_2() {
         return read_reg(REGISTER::VGS_STATUS_2);
+    }
+
+    String DRV8323::get_fault_status_2_string() {
+        uint16_t fault_code = get_fault_status_2();
+        String fault_string = "";
+        if (getBit(fault_code, 0)) {
+            fault_string += "VGS_LC ";
+        }
+        if (getBit(fault_code, 1)) {
+            fault_string += "VGS_HC ";
+        }
+        if (getBit(fault_code, 2)) {
+            fault_string += "VGS_LB ";
+        }
+        if (getBit(fault_code, 3)) {
+            fault_string += "VGS_HB ";
+        }
+        if (getBit(fault_code, 4)) {
+            fault_string += "VGS_LA ";
+        }
+        if (getBit(fault_code, 5)) {
+            fault_string += "VGS_HA ";
+        }
+        if (getBit(fault_code, 6)) {
+            fault_string += "CPUV ";
+        }
+        if (getBit(fault_code, 7)) {
+            fault_string += "OTW ";
+        }
+        if (getBit(fault_code, 8)) {
+            fault_string += "SC_OC ";
+        }
+        if (getBit(fault_code, 9)) {
+            fault_string += "SB_OC ";
+        }
+        if (getBit(fault_code, 10)) {
+            fault_string += "SA_OC ";
+        }
+        return fault_string;
     }
 
     void DRV8323::set_pwm_mode(PWM_MODE mode) {
@@ -94,10 +173,10 @@ namespace DRV8323 {
 
     void DRV8323::default_configuration() {
         enable(true);
-        set_pwm_mode(PWM_MODE::PWM_INDEPENDENT);
+        set_pwm_mode(PWM_MODE::PWM_1x);
         enable_CPUV_Fault(false);
         enable_GDF(false);
-        set_SYNC_rectification(true);
+//        set_SYNC_rectification(true);
     }
 
     void DRV8323::enable_CPUV_Fault(bool enable) {
@@ -106,7 +185,7 @@ namespace DRV8323 {
         write_reg(REGISTER::DRIVER_CONTROL, data);
     }
 
-    void DRV8323::enable_GDF(bool enable) {
+    void DRV8323::enable_GDF(bool enable) { // Gate drive fault
         uint16_t data = read_reg(REGISTER::DRIVER_CONTROL);
         setBit(&data, 3, enable ? 0 : 1);
         write_reg(REGISTER::DRIVER_CONTROL, data);
@@ -118,6 +197,12 @@ namespace DRV8323 {
         setBit(&data, 8, enable ? 0 : 1);
         write_reg(REGISTER::DRIVER_CONTROL, data);
 
+    }
+
+    void DRV8323::clear_fault() {
+        uint16_t data = read_reg(REGISTER::DRIVER_CONTROL);
+        setBit(&data, 0, 1);
+        write_reg(REGISTER::DRIVER_CONTROL, data);
     }
 
 

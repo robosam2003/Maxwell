@@ -36,7 +36,11 @@ public:
 
     uint16_t get_fault_status_1();
 
+    String get_fault_status_1_string();
+
     uint16_t get_fault_status_2();
+
+    String get_fault_status_2_string();
 
     void set_pwm_mode(PWM_MODE mode);
 
@@ -46,11 +50,10 @@ public:
 
     void enable_GDF(bool enable);
 
+    void clear_fault();
+
+
     void default_configuration();
-
-
-
-
 
 };
 
