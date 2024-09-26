@@ -8,7 +8,6 @@
 #include "Arduino.h"
 #include "DRV8323_constants.h"
 #include <SPI.h>
-#include "pin_definitions.h"
 
 namespace DRV8323 {
 
@@ -21,12 +20,13 @@ private:
     SPISettings _settings;
     byte address_length = 4;
     byte word_length = 16;
+    byte gate_en_pin;
 
     bool enabled = false;
 
 public:
     // Constructor
-    DRV8323(byte CS, SPIClass& spi, uint32_t spiFreq);
+    DRV8323(byte CS, SPIClass& spi, uint32_t spiFreq, byte gate_enable_pin);
 
     void enable(bool enable);
 

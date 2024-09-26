@@ -1,16 +1,18 @@
-//#include <Arduino.h>
 #include "pin_definitions.h"
 #include "Maxwell.h"
 #include "DRV8323.h"
-#include "AS5047P.h"
 #include "FreeRTOS.h"
+#include "AS5047P.h"
 
 
 
 SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
 SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
 
-DRV8323::DRV8323 drv8323(DRV8323_CS_PIN, SPI_1, 1000000);
+DRV8323::DRV8323 drv8323(DRV8323_CS_PIN, SPI_1, 1000000, DRV8323_GATE_EN_PIN);
+
+AS5047P::AS5047P encoder(AS5047P_CS_PIN, SPI_2, 1000000);
+
 
 double prev_cross_voltage = -1;
 
@@ -30,6 +32,8 @@ void setup() {
     digitalWrite(DRV8323_DRIVE_CAL_PIN, LOW);
 
     drv8323.default_configuration(); // set up the gate driver
+
+
 }
 
 
@@ -91,8 +95,8 @@ uint8_t six_step_high_impedance_phase[6] = {
 };
 
 void delay_while_excecuting_func(int del, void (*func)(uint8_t arg), uint8_t arg) {
-    unsigned long start_time = millis();
-    while (millis() - start_time < del) {
+    unsigned long start_time = micros();
+    while (micros() - start_time < del) {
         func(arg);
     }
 }
@@ -114,7 +118,7 @@ bool check_zero_cross(uint8_t pin) {
     }
     prev_cross_voltage = v_p;
     return false;
-}
+}   
 
 void delay_while_checking_zero_cross(int del, uint8_t pin) {
     unsigned long start_time = millis();
@@ -155,12 +159,15 @@ void six_step_commutation_loop(int del, int level, int num_loops) {
             Serial.print(six_step_commutation_states[j][1]);
             Serial.println(six_step_commutation_states[j][2]);
             sense_print_voltages();
-//            sense_print_currents();
+            sense_print_currents();
             Serial.println(drv8323.get_fault_status_1_string());
             Serial.println(drv8323.get_fault_status_2_string());
-            drv8323.clear_fault();
-//            delay_while_excecuting_func(del, check_zero_cross, six_step_high_impedance_phase[j]);
-            delay_while_checking_zero_cross(del, six_step_high_impedance_phase[j]);
+//            drv8323.clear_fault();
+            uint8_t arg = six_step_high_impedance_phase[j];
+            delay_while_excecuting_func(del, reinterpret_cast<void (*)(uint8_t)>(sense_print_voltages), 0);
+//            delay_while_checking_zero_cross(del, six_step_high_impedance_phase[j]);
+
+//            delay(del);
         }
         Serial.println("----------------------");
     }
@@ -171,10 +178,91 @@ void six_step_commutation_loop(int del, int level, int num_loops) {
     delay(3*del);
 }
 
+void motor_start(int level) {
+    drv8323.default_configuration(); // set up the gate driver
+    digitalWrite(DRV8323_BRAKE_PIN, HIGH); // set the brake pin to high - disables brake.
+    digitalWrite(DRV8323_DIR_PIN, HIGH); // set the direction pin to high
+    analogWrite(DRV8323_PWM1X_PIN, level); // set the pwm pin to the pwm level out of 255
+
+
+    digitalWrite(DRV8323_STATE0_PIN, HIGH);
+    digitalWrite(DRV8323_STATE1_PIN, HIGH);
+    digitalWrite(DRV8323_STATE2_PIN, HIGH);
+    delay(100);
+
+//    analogWrite(DRV8323_PWM1X_PIN, level); // set the pwm pin to the pwm level out of 255
+}
+
+void open_loop_acceleration(int level, int start_del_us, int end_del_us, int step_del_us) {
+    analogWrite(DRV8323_PWM1X_PIN, level); // set the pwm pin to the pwm level out of 255
+
+    for (int i = start_del_us; i > end_del_us; i -= step_del_us) {
+        int del_us = i;
+        for (int j = 0; j < 6; j++) {
+            digitalWrite(DRV8323_STATE0_PIN, six_step_commutation_states[j][0]);
+            digitalWrite(DRV8323_STATE1_PIN, six_step_commutation_states[j][1]);
+            digitalWrite(DRV8323_STATE2_PIN, six_step_commutation_states[j][2]);
+            Serial.print(six_step_commutation_states[j][0]);
+            Serial.print(six_step_commutation_states[j][1]);
+            Serial.println(six_step_commutation_states[j][2]);
+            sense_print_voltages();
+            sense_print_currents();
+            Serial.println(drv8323.get_fault_status_1_string());
+            Serial.println(drv8323.get_fault_status_2_string());
+//            drv8323.clear_fault();
+            uint8_t arg = six_step_high_impedance_phase[j];
+            delay_while_excecuting_func(del_us, reinterpret_cast<void (*)(uint8_t)>(sense_print_voltages), 0);
+//            delay_while_checking_zero_cross(del, six_step_high_impedance_phase[j]);
+
+//            delay(del);
+        }
+        Serial.println("----------------------");
+    }
+}
+
+void closed_loop_control(int level, int del_us, int num_loops) {
+    for (int i = 0; i < num_loops; i++) {
+        for (int j = 0; j < 6; j++) {
+            digitalWrite(DRV8323_STATE0_PIN, six_step_commutation_states[j][0]);
+            digitalWrite(DRV8323_STATE1_PIN, six_step_commutation_states[j][1]);
+            digitalWrite(DRV8323_STATE2_PIN, six_step_commutation_states[j][2]);
+            Serial.print(six_step_commutation_states[j][0]);
+            Serial.print(six_step_commutation_states[j][1]);
+            Serial.println(six_step_commutation_states[j][2]);
+            sense_print_voltages();
+//            sense_print_currents();
+            Serial.println(drv8323.get_fault_status_1_string());
+            Serial.println(drv8323.get_fault_status_2_string());
+//            drv8323.clear_fault();
+            uint8_t arg = six_step_high_impedance_phase[j];
+            delay_while_excecuting_func(del_us, reinterpret_cast<void (*)(uint8_t)>(sense_print_voltages), 0);
+        }
+        Serial.println("----------------------");
+    }
+}
+
+void motor_stop() {
+    analogWrite(DRV8323_PWM1X_PIN, 0); // set the pwm pin to the pwm level out of 255
+
+    digitalWrite(DRV8323_BRAKE_PIN, LOW); // set the brake pin to LOW - enables brake
+
+//    digitalWrite(DRV8323_STATE0_PIN, LOW);
+//    digitalWrite(DRV8323_STATE1_PIN, LOW);
+//    digitalWrite(DRV8323_STATE2_PIN, LOW);
+    delay(100);
+}
 
 void loop() {
-    six_step_commutation_loop(8, 5, 100);
-    Serial.println("=====================================");
-    delay(2000);
-
+//    six_step_commutation_loop(8, 5, 100);
+//    Serial.println("=====================================");
+//    delay(2000);
+//    motor_start(10);
+//    open_loop_acceleration(7, 10000, 100, 100);
+////    closed_loop_control(5, 100, 2000);
+//    motor_stop();
+//    delay(5000);
+    uint16_t angle = encoder.get_angle();
+    uint16_t mag = encoder.get_mag_strength();
+    Serial.printf("Angle: %d, Mag: %d\n", angle, mag);
+    delay(100);
 }

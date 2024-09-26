@@ -19,9 +19,11 @@ namespace DRV8323 {
 
 
     // Constructor
-    DRV8323::DRV8323(byte CS, SPIClass &spi, uint32_t spiFreq) {
+    DRV8323::DRV8323(byte CS, SPIClass &spi, uint32_t spiFreq, byte gate_enable_pin) {
         _CS = CS;
         _spi = spi;
+        gate_en_pin = gate_enable_pin;
+
 
         // Set up SPI settings - SPI MODE 1 because data is captured on the falling edge of the clock
         // and propagated on the rising edge - https://en.wikipedia.org/wiki/Serial_Peripheral_Interface
@@ -38,9 +40,9 @@ namespace DRV8323 {
     void DRV8323::enable(bool enable) {
         enabled = enable;
         if (enable) {
-            digitalWrite(DRV8323_GATE_EN_PIN, HIGH);
+            digitalWrite(gate_en_pin, HIGH);
         } else {
-            digitalWrite(DRV8323_GATE_EN_PIN, LOW);
+            digitalWrite(gate_en_pin, LOW);
         }
         delay(1);  // Wake-up time for DRV8323 is maximum 1ms
     }
