@@ -5,20 +5,21 @@
 #ifndef MAXWELL_MAXWELL_H
 #define MAXWELL_MAXWELL_H
 
-#include "../lib/DRV8323/DRV8323.h"
+#include <pin_definitions.h>
+#include "DRV8323.h"
 
+namespace Maxwell {
+    class Maxwell {
+    private:
+        uint32_t led_pin = GREEN_LED_PIN;
+        uint32_t gate_en_pin = DRV8323_GATE_EN_PIN;
 
-class Maxwell {
-private:
+    public:
+        Maxwell(); // Constructor
 
-public:
-    Maxwell(); // Constructor
+        void setup();
 
-    void setup();
-
-
-
-};
-
-
+        void toggle_led();
+    };
+}
 #endif //MAXWELL_MAXWELL_H
