@@ -47,7 +47,7 @@
 #define CAN_S_PIN                   PB14
 #define CAN_FAULT_PIN               PC6
 
-// FETS
+
 #define V_SENSE_A_PIN               PC0
 #define V_SENSE_B_PIN               PA0
 #define V_SENSE_C_PIN               PC1
@@ -59,6 +59,13 @@
 #define GREEN_LED_PIN               PB2
 #define SOLENOID_EN_PIN             PA10
 #define PWM_IN_PIN                  PA8
+
+
+// Hall sensors
+#define HALL_A_PIN                  PB10
+#define HALL_B_PIN                  PB11
+#define HALL_C_PIN                  PC3
+#define HALL_TEMP_PIN               PC2
 
 
 

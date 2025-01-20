@@ -122,7 +122,6 @@ namespace DRV8323 {
         return fault_string;
     }
 
-
     uint16_t DRV8323::get_fault_status_2() {
         return read_reg(REGISTER::VGS_STATUS_2);
     }
@@ -175,10 +174,9 @@ namespace DRV8323 {
 
     void DRV8323::default_configuration() {
         enable(true);
-        set_pwm_mode(PWM_MODE::PWM_1x);
+        set_pwm_mode(PWM_MODE::PWM_6x);
         enable_CPUV_Fault(false);
         enable_GDF(false);
-//        set_SYNC_rectification(true);
     }
 
     void DRV8323::enable_CPUV_Fault(bool enable) {

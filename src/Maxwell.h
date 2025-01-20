@@ -7,19 +7,35 @@
 
 #include <pin_definitions.h>
 #include "DRV8323.h"
+#include "AS5047P.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 namespace Maxwell {
-    class Maxwell {
-    private:
-        uint32_t led_pin = GREEN_LED_PIN;
-        uint32_t gate_en_pin = DRV8323_GATE_EN_PIN;
 
+    struct triggered {
+        bool phases[3];
+        bool zero_cross[3];
+    };
+
+    class Maxwell {
     public:
+        DRV8323::DRV8323* driver;
+        // AS5047P::AS5047P* encoder;
+        triggered* trigger;
+
+
         Maxwell(); // Constructor
 
         void setup();
 
-        void toggle_led();
+        void drive_hall_velocity(int velocity, int duration);
+
+        void drive_velocity(int velocity, int duration);
+
+
+
+        // static void driver_error_task(void *pvParameters);
     };
 }
 #endif //MAXWELL_MAXWELL_H
