@@ -10,6 +10,7 @@
 #include "AS5047P.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "HallSensor.h"
 
 namespace Maxwell {
 
@@ -21,6 +22,7 @@ namespace Maxwell {
     class Maxwell {
     public:
         DRV8323::DRV8323* driver;
+        HallSensor* hall_sensor;
         // AS5047P::AS5047P* encoder;
         triggered* trigger;
 

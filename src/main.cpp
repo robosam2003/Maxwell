@@ -5,37 +5,45 @@
 #include "task.h"
 #include "timers.h"
 
+Maxwell::Maxwell maxwell;
+Maxwell::HallSensor hall_sensor(HALL_A_PIN, HALL_B_PIN, HALL_C_PIN);
 
 
-void drive_motor(void *pvParameters) {
-    Maxwell::Maxwell maxwell;
-    maxwell.setup();
-
-    for (;;) {
-        maxwell.drive_hall_velocity(10, 7000); // 2 seconds
-        vTaskDelay(2000);
-    }
+void hall_a_callback() {
+    hall_sensor.callback_a();
+}
+void hall_b_callback() {
+    hall_sensor.callback_b();
+}
+void hall_c_callback() {
+    hall_sensor.callback_c();
 }
 
+
 void setup() {
+    // xTaskCreate(
+    //     drive_motor,
+    //     "drive motor",
+    //     1000,
+    //     NULL,
+    //     1,
+    //     NULL
+    // );
 
-    xTaskCreate(
-        drive_motor,
-        "drive motor",
-        1000,
-        NULL,
-        1,
-        NULL
-    );
+    Serial.begin(115200);
+    maxwell.hall_sensor = &hall_sensor;
+    maxwell.setup();
+    hall_sensor.setup(true, hall_a_callback, hall_b_callback, hall_c_callback);
 
 
 
 
-    vTaskStartScheduler();
+    // vTaskStartScheduler();
 
 }
 
 void loop() {
-
+    maxwell.drive_hall_velocity(10, 7000); // 2 seconds
+    // vTaskDelay(2000);
 }
 

@@ -27,47 +27,6 @@ namespace Maxwell {
         trigger = new triggered{false, false, false};
     }
 
-    void read_voltage_state(void* pvParameters) {
-        triggered* trigger = (triggered*) pvParameters;
-
-        for (;;) {
-        //     double voltage_a = analogRead(V_SENSE_A_PIN) * SENSE_CONVERSION_FACTOR;
-        //     double voltage_b = analogRead(V_SENSE_B_PIN) * SENSE_CONVERSION_FACTOR;
-        //     double voltage_c = analogRead(V_SENSE_C_PIN) * SENSE_CONVERSION_FACTOR;
-        //     double supply_voltage = analogRead(V_SUPPLY_SENSE_PIN) * SENSE_CONVERSION_FACTOR;
-        //     // Serial.print(voltage_a); Serial.print(", ");
-        //     // Serial.print(voltage_b); Serial.print(", ");
-        //     // Serial.print(voltage_c); Serial.print(", ");
-        //     // Serial.print(supply_voltage); Serial.print("\n");
-        //
-        //     double half_supply_voltage = supply_voltage / 3;
-        //     (trigger->phases[0] != (voltage_a > half_supply_voltage)) ? trigger->zero_cross[0] = true : trigger->zero_cross[0] = false;
-        //     (trigger->phases[1] != (voltage_b > half_supply_voltage)) ? trigger->zero_cross[1] = true : trigger->zero_cross[1] = false;
-        //     (trigger->phases[2] != (voltage_c > half_supply_voltage)) ? trigger->zero_cross[2] = true : trigger->zero_cross[2] = false;
-        //     (voltage_a > half_supply_voltage) ? trigger->phases[0] = true : trigger->phases[0] = false;
-        //     (voltage_b > half_supply_voltage) ? trigger->phases[1] = true : trigger->phases[1] = false;
-        //     (voltage_c > half_supply_voltage) ? trigger->phases[2] = true : trigger->phases[2] = false;
-        //     if (trigger->zero_cross[0] | trigger->zero_cross[1] | trigger->zero_cross[2]) {
-        //         Serial.print(trigger->zero_cross[0]); Serial.print(", ");
-        //         Serial.print(trigger->zero_cross[1]); Serial.print(", ");
-        //         Serial.print(trigger->zero_cross[2]); Serial.print("\n");
-        //     }
-        //
-        //     digitalToggle(GREEN_LED_PIN);
-        //     // Serial.println("HELOOOO");
-        //     // vTaskDelay(1);
-            uint32_t hall_a = digitalRead(HALL_A_PIN);
-            uint32_t hall_b = digitalRead(HALL_B_PIN);
-            uint32_t hall_c = digitalRead(HALL_C_PIN);
-            Serial.print(hall_a); Serial.print(", ");
-            Serial.print(hall_b); Serial.print(", ");
-            Serial.print(hall_c); Serial.print("\n");
-            vTaskDelay(1);
-            digitalToggle(GREEN_LED_PIN);
-        }
-
-    }
-
     void Maxwell::setup() {
         pinMode(HALL_A_PIN, INPUT);
         pinMode(HALL_B_PIN, INPUT);
@@ -95,25 +54,6 @@ namespace Maxwell {
 
 
         digitalWrite(DRV8323_DRIVE_CAL_PIN, LOW);
-
-        pinMode(HALL_A_PIN, INPUT_PULLUP);
-        pinMode(HALL_B_PIN, INPUT_PULLUP);
-        pinMode(HALL_C_PIN, INPUT_PULLUP);
-        // pinMode(HALL_TEMP_PIN, INPUT);
-
-        // // Configure stm32 adc watchdog
-        // ADC1->CR1 |= ADC_CR1_AWDEN;
-
-
-
-        // xTaskCreate(
-        //     read_voltage_state,
-        //     "Read Voltage State",
-        //     1000,
-        //     (void*) trigger,
-        //     1,
-        //     NULL
-        // );
     }
 
     void Maxwell::drive_hall_velocity(int velocity, int duration) { // velocity is in ms, duration is in ms
@@ -126,15 +66,6 @@ namespace Maxwell {
             {0, 1, 1, 0, 0, 0}  // 6 - C - B->A
         };
 
-        uint8_t hall_states[6][3] = {
-            {0, 0, 1},
-            {0, 1, 1},
-            {0, 1, 0},
-            {1, 1, 0},
-            {1, 0, 0},
-            {1, 0, 1}
-        };
-
         // Running in 6x PWM mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
 
@@ -143,34 +74,30 @@ namespace Maxwell {
         digitalWrite(DRV8323_BRAKE_PIN, HIGH); // set the brake pin to high - disables brake.
         digitalWrite(DRV8323_DIR_PIN, HIGH);    // set the direction pin to high
 
-        int level = 40;
-        int step = 0;
+        // double align
+        analogWrite(DRV8323_HI_B_PIN, 80);
+        analogWrite(DRV8323_LO_A_PIN, 80);
+        delay(100);
+
+        // analogWrite(DRV8323_HI_A_PIN, 100);
+        // analogWrite(DRV8323_LO_C_PIN, 100);
+        // vTaskDelay(100);
+
+        int level = 50;
+        uint8_t step = 0;
         uint32_t start = millis();
         int i = 0;
-        for (; millis() - start < duration/2;) {
-            uint32_t hall_a = digitalRead(HALL_A_PIN);
-            uint32_t hall_b = digitalRead(HALL_B_PIN);
-            uint32_t hall_c = digitalRead(HALL_C_PIN);
-            Serial.print(hall_a); Serial.print(", ");
-            Serial.print(hall_b); Serial.print(", ");
-            Serial.print(hall_c); Serial.print("\n");
-
-            uint32_t hall_state[3] = {hall_a, hall_b, hall_c};
-
+        for (; millis() - start < duration;) {
             // Match the state of the hall sensors to the commutation states
-            for (int j = 0; j < 6; j++) {
-                if (hall_state[0] == hall_states[j][0] && hall_state[1] == hall_states[j][1] && hall_state[2] == hall_states[j][2]) {
-                    i = j;
-                    break;
-                }
-            }
-            step = i % 6;
+            step = (hall_sensor->rotor_sector + 2) % 6;
             analogWrite(DRV8323_HI_A_PIN, six_step_commutation_states[step][0] * level);
             analogWrite(DRV8323_LO_A_PIN, six_step_commutation_states[step][1] * level);
             analogWrite(DRV8323_HI_B_PIN, six_step_commutation_states[step][2] * level);
             analogWrite(DRV8323_LO_B_PIN, six_step_commutation_states[step][3] * level);
             analogWrite(DRV8323_HI_C_PIN, six_step_commutation_states[step][4] * level);
             analogWrite(DRV8323_LO_C_PIN, six_step_commutation_states[step][5] * level);
+
+            delay(10);
             // i++;
         }
 
