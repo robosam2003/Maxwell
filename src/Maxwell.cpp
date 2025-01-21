@@ -89,7 +89,7 @@ namespace Maxwell {
         int i = 0;
         for (; millis() - start < duration;) {
             // Match the state of the hall sensors to the commutation states
-            step = (hall_sensor->rotor_sector + 2) % 6;
+            step = (hall_sensor->rotor_sector) % 6;
             analogWrite(DRV8323_HI_A_PIN, six_step_commutation_states[step][0] * level);
             analogWrite(DRV8323_LO_A_PIN, six_step_commutation_states[step][1] * level);
             analogWrite(DRV8323_HI_B_PIN, six_step_commutation_states[step][2] * level);

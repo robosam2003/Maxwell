@@ -17,8 +17,11 @@ private:
 
 // 0, 1, 2, 3, 4, 5 - INDEX
 // 1, 3, 2, 6, 4, 5 - HALL SEQUENCE
-//   000 001 010 011 100 101 110 111
-int8_t hallcode_to_index[8] =   { -1,  0,  2,  1,  4,  5,  3, -1};
+//                               000 001 010 011 100 101 110 111
+// int8_t hallcode_to_index[8] =   { -1,  0,  2,  1,  4,  5,  3, -1};
+int8_t hallcode_to_index[8] =   { -1,  3,  5,  4,  1,  2,  0, -1};
+
+    // int hall_to_index[6] = {1, 3, 2, 6, 4, 5};
 // e.g. index = hall_to_index[rotor_position]
 
     // For debouncing hall sensor signals
