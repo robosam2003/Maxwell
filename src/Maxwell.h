@@ -11,6 +11,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "HallSensor.h"
+#include "pid_controller.h"
 
 namespace Maxwell {
 
@@ -24,6 +25,7 @@ namespace Maxwell {
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
         // AS5047P::AS5047P* encoder;
+        PIDController* pid_controller;
         triggered* trigger;
 
 

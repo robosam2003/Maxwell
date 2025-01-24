@@ -31,9 +31,9 @@ void setup() {
     // );
 
     Serial.begin(115200);
-    maxwell.hall_sensor = &hall_sensor;
     maxwell.setup();
     hall_sensor.setup(true, hall_a_callback, hall_b_callback, hall_c_callback);
+    maxwell.hall_sensor = &hall_sensor;
 
 
 
@@ -44,6 +44,7 @@ void setup() {
 
 void loop() {
     maxwell.drive_hall_velocity(10, 7000); // 2 seconds
+    delay(2000);
     // vTaskDelay(2000);
 }
 
