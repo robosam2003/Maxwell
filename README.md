@@ -1,7 +1,7 @@
 # Maxwell - An Open Source 3-Phase Motor Controller
 
 
-![pcb_front_3d.png](Hardware%2FV1.0%2Fpcb_front_3d.png)
+![pcb_front_3d.png](Docs/Hardware/V1.0/pcb_front_3d.png)
 
 ---
 ## Specifications:
