@@ -27,6 +27,8 @@ namespace Maxwell {
         hall_c_state = digitalRead(hall_pin_c);
         hall_code = hall_a_state << 2 | hall_b_state << 1 | hall_c_state; // 0-7
         rotor_sector = hallcode_to_index[hall_code];
+
+        velocity_filter = new RCFilter(20); // 1kHz cutoff frequency
     }
 
 
@@ -63,7 +65,8 @@ namespace Maxwell {
         }
         // Calculate electrical velocity
         uint32_t current_time = micros();
-        electrical_velocity = (direction) * PI /3 / (current_time - prev_callback_time) * 1e6;
+        float new_speed = (direction) * PI /3 / (current_time - prev_callback_time) * 1e6;
+        electrical_velocity = static_cast<float>(velocity_filter->update(new_speed, current_time));
         prev_callback_time = current_time;
         // Serial.print(hallcode_to_index[hall_code]); Serial.print(" ");
         // Serial.println(hall_code, BIN);

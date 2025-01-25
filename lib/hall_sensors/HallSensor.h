@@ -5,6 +5,7 @@
 #ifndef HALLSENSOR_H
 #define HALLSENSOR_H
 #include <Arduino.h>
+#include <RCFilter.h>
 
 namespace Maxwell {
 
@@ -24,7 +25,7 @@ private:
 // 0, 1, 2, 3, 4, 5 - INDEX
 // 1, 3, 2, 6, 4, 5 - HALL SEQUENCE
 //                               000 001 010 011 100 101 110 111
-// int8_t hallcode_to_index[8] =   { -1,  0,  2,  1,  4,  5,  3, -1};  // wrong way?
+// int8_t hallcode_to_index_cw[8] =   { -1,  0,  2,  1,  4,  5,  3, -1};  // wrong way?
 int8_t hallcode_to_index[8] =   { -1,  3,  5,  4,  1,  2,  0, -1};
 
     // int hall_to_index[6] = {1, 3, 2, 6, 4, 5};
@@ -51,6 +52,8 @@ public:
     uint8_t hall_code;
     int8_t rotor_sector;
     float electrical_velocity;
+    RCFilter* velocity_filter;
+
 
 
     HallSensor(int pin_a, int pin_b, int pin_c);

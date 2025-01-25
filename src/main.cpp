@@ -43,7 +43,7 @@ void setup() {
 }
 
 void loop() {
-    maxwell.drive_hall_velocity(10, 7000); // 2 seconds
+    maxwell.drive_hall_velocity(10, 5000); // 2 seconds
     delay(2000);
     // vTaskDelay(2000);
 }
