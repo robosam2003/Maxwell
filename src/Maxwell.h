@@ -36,7 +36,7 @@ namespace Maxwell {
 
         void setup();
 
-        void drive_hall_velocity(int duration);
+        void drive_hall_velocity();
 
         void drive_velocity(int velocity, int duration);
 

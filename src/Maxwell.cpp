@@ -6,7 +6,7 @@
 
 namespace Maxwell {
     #define MAX_LEVEL 80  // out of 255
-    #define MAX_SPEED 1000 // electrical rads/s
+    #define MAX_SPEED 1500 // electrical rads/s
 
 
 
@@ -20,17 +20,11 @@ namespace Maxwell {
             1000000,
             DRV8323_GATE_EN_PIN);
 
-        // encoder = new AS5047P::AS5047P(
-        //     AS5047P_CS_PIN,
-        //     SPI_2,
-        //     1000000);
-
         trigger = new triggered{false, false, false};
         pid_controller = new PIDController(0.2, 2, 0,
             0,
             static_cast<float>(MAX_LEVEL),
             30);
-        pwm_input = new PWMInput(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
     }
 
     void Maxwell::setup() {
@@ -62,9 +56,16 @@ namespace Maxwell {
         digitalWrite(DRV8323_DRIVE_CAL_PIN, LOW);
     }
 
-    void Maxwell::drive_hall_velocity(int duration) { // velocity is in electrical rads/s, duration is in ms
-        // velocity is from 0-100
-        // level is between 0-MAX_LEVEL
+    void all_off() {
+        digitalWrite(DRV8323_HI_A_PIN, LOW);
+        digitalWrite(DRV8323_HI_B_PIN, LOW);
+        digitalWrite(DRV8323_HI_C_PIN, LOW);
+        digitalWrite(DRV8323_LO_A_PIN, LOW);
+        digitalWrite(DRV8323_LO_B_PIN, LOW);
+        digitalWrite(DRV8323_LO_C_PIN, LOW);
+    }
+
+    void Maxwell::drive_hall_velocity() { // velocity is in electrical rads/s, duration is in ms
 
         uint8_t six_step_commutation_states_ccw[6][6] = {
             {0, 0, 1, 0, 0, 1}, // 0 - B->C // 110
@@ -92,14 +93,18 @@ namespace Maxwell {
         // digitalWrite(DRV8323_LO_C_PIN, HIGH);
         // delay(100);
 
+        all_off();
+
+
+
         int level = 0;
         uint8_t step = 0;
         uint32_t start = millis();
         bool aligned = false;
         int8_t old_rotor_sector = hall_sensor->rotor_sector;
 
-        for (; millis() - start < duration;) {
-            if (pwm_input->read_percentage() > 10) {
+        while (true) {
+            if (pwm_input->read_percentage() > 5) {
                 uint32_t velocity = map(pwm_input->read_percentage(), 0, 100, 0, MAX_SPEED);
                 pid_controller->set_setpoint(static_cast<float>(velocity));
 
@@ -133,12 +138,7 @@ namespace Maxwell {
             }
             else {
                 aligned = false;
-                digitalWrite(DRV8323_HI_A_PIN, 0);
-                digitalWrite(DRV8323_LO_A_PIN, 0);
-                digitalWrite(DRV8323_HI_B_PIN, 0);
-                digitalWrite(DRV8323_LO_B_PIN, 0);
-                digitalWrite(DRV8323_HI_C_PIN, 0);
-                digitalWrite(DRV8323_LO_C_PIN, 0);
+                all_off();
                 pid_controller->set_setpoint(0);
             }
         }
