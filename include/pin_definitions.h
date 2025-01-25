@@ -47,12 +47,11 @@
 #define CAN_S_PIN                   PB14
 #define CAN_FAULT_PIN               PC6
 
-
+// Sense
 #define V_SENSE_A_PIN               PC0
 #define V_SENSE_B_PIN               PA0
 #define V_SENSE_C_PIN               PC1
 
-// Power
 #define V_SUPPLY_SENSE_PIN          PA4
 
 // Other

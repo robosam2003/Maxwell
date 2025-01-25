@@ -5,7 +5,8 @@
 #include "Maxwell.h"
 
 namespace Maxwell {
-    #define MAX_LEVEL 70
+    #define MAX_LEVEL 80  // out of 255
+    #define MAX_SPEED 1000 // electrical rads/s
 
 
 
@@ -29,6 +30,7 @@ namespace Maxwell {
             0,
             static_cast<float>(MAX_LEVEL),
             30);
+        pwm_input = new PWMInput(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
     }
 
     void Maxwell::setup() {
@@ -60,10 +62,9 @@ namespace Maxwell {
         digitalWrite(DRV8323_DRIVE_CAL_PIN, LOW);
     }
 
-    void Maxwell::drive_hall_velocity(int velocity, int duration) { // velocity is in electrical rads/s, duration is in ms
-
-
-
+    void Maxwell::drive_hall_velocity(int duration) { // velocity is in electrical rads/s, duration is in ms
+        // velocity is from 0-100
+        // level is between 0-MAX_LEVEL
 
         uint8_t six_step_commutation_states_ccw[6][6] = {
             {0, 0, 1, 0, 0, 1}, // 0 - B->C // 110
@@ -72,6 +73,7 @@ namespace Maxwell {
             {0, 0, 0, 1, 1, 0}, // 3 - C->B // 001
             {0, 1, 0, 0, 1, 0}, // 4 - C->A // 011
             {0, 1, 1, 0, 0, 0}  // 5 - B->A // 010
+
         };
 
 
@@ -84,69 +86,70 @@ namespace Maxwell {
         digitalWrite(DRV8323_DIR_PIN, HIGH);    // set the direction pin to high
 
         int dir = MOTOR_DIRECTION::CW;
-        analogWrite(DRV8323_HI_A_PIN, 100);
-        digitalWrite(DRV8323_LO_B_PIN, HIGH);
-        digitalWrite(DRV8323_LO_C_PIN, HIGH);
-        delay(100);
+        // // ALIGN
+        // analogWrite(DRV8323_HI_A_PIN, 100);
+        // digitalWrite(DRV8323_LO_B_PIN, HIGH);
+        // digitalWrite(DRV8323_LO_C_PIN, HIGH);
+        // delay(100);
 
-        // switch (dir){
-        //     case MOTOR_DIRECTION::CCW:
-        //         // double align
-        //         analogWrite(DRV8323_HI_B_PIN, 100);
-        //         analogWrite(DRV8323_LO_C_PIN, 100);
-        //         delay(100);
-        //
-        //         analogWrite(DRV8323_HI_A_PIN, 100);
-        //         analogWrite(DRV8323_LO_C_PIN, 100);
-        //         delay(100);
-        //         break;
-        //     case MOTOR_DIRECTION::CW:
-        //         // double align
-        //         analogWrite(DRV8323_HI_A_PIN, 100);
-        //         analogWrite(DRV8323_LO_B_PIN, 100);
-        //         delay(100);
-        //
-        //         analogWrite(DRV8323_HI_A_PIN, 100);
-        //         analogWrite(DRV8323_LO_C_PIN, 100);
-        //         delay(100);
-        //         break;
-        // }
-
-
-
-        int level = 40;
+        int level = 0;
         uint8_t step = 0;
         uint32_t start = millis();
+        bool aligned = false;
         int8_t old_rotor_sector = hall_sensor->rotor_sector;
-        int i = 0;
+
         for (; millis() - start < duration;) {
-            float speed = hall_sensor->electrical_velocity;
-            float output = pid_controller->update(speed);
-            level = constrain(output, 0, MAX_LEVEL);
-            // Match the state of the hall sensors to the commutation states
-            // rotor_sector goes from 0-5
-            step = dir == MOTOR_DIRECTION::CW ? (hall_sensor->rotor_sector + 3) % 6 : hall_sensor->rotor_sector;
-            analogWrite(DRV8323_HI_A_PIN, six_step_commutation_states_ccw[step][0] * level);
-            digitalWrite(DRV8323_LO_A_PIN, six_step_commutation_states_ccw[step][1]);
-            analogWrite(DRV8323_HI_B_PIN, six_step_commutation_states_ccw[step][2] * level);
-            digitalWrite(DRV8323_LO_B_PIN, six_step_commutation_states_ccw[step][3]);
-            analogWrite(DRV8323_HI_C_PIN, six_step_commutation_states_ccw[step][4] * level);
-            digitalWrite(DRV8323_LO_C_PIN, six_step_commutation_states_ccw[step][5]);
-            if (hall_sensor->rotor_sector != old_rotor_sector) {
-                pid_controller->print_state();
+            if (pwm_input->read_percentage() > 10) {
+                uint32_t velocity = map(pwm_input->read_percentage(), 0, 100, 0, MAX_SPEED);
+                pid_controller->set_setpoint(static_cast<float>(velocity));
+
+                if (not aligned) {
+                    // ALIGN
+                    analogWrite(DRV8323_HI_A_PIN, 100);
+                    digitalWrite(DRV8323_LO_B_PIN, HIGH);
+                    digitalWrite(DRV8323_LO_C_PIN, HIGH);
+                    delay(100);
+                    Serial.println("Aligned");
+                    aligned = true;
+                }
+
+                float speed = hall_sensor->electrical_velocity;
+                float output = pid_controller->update(speed);
+                level = constrain(output, 0, MAX_LEVEL);
+                // Match the state of the hall sensors to the commutation states
+                // rotor_sector goes from 0-5
+                step = dir == MOTOR_DIRECTION::CW ? (hall_sensor->rotor_sector + 3) % 6 : hall_sensor->rotor_sector;
+                analogWrite(DRV8323_HI_A_PIN, six_step_commutation_states_ccw[step][0] * level);
+                digitalWrite(DRV8323_LO_A_PIN, six_step_commutation_states_ccw[step][1]);
+                analogWrite(DRV8323_HI_B_PIN, six_step_commutation_states_ccw[step][2] * level);
+                digitalWrite(DRV8323_LO_B_PIN, six_step_commutation_states_ccw[step][3]);
+                analogWrite(DRV8323_HI_C_PIN, six_step_commutation_states_ccw[step][4] * level);
+                digitalWrite(DRV8323_LO_C_PIN, six_step_commutation_states_ccw[step][5]);
+
+                if (hall_sensor->rotor_sector != old_rotor_sector) {
+                    pid_controller->print_state();
+                }
+                old_rotor_sector = hall_sensor->rotor_sector;
             }
-            old_rotor_sector = hall_sensor->rotor_sector;
+            else {
+                aligned = false;
+                digitalWrite(DRV8323_HI_A_PIN, 0);
+                digitalWrite(DRV8323_LO_A_PIN, 0);
+                digitalWrite(DRV8323_HI_B_PIN, 0);
+                digitalWrite(DRV8323_LO_B_PIN, 0);
+                digitalWrite(DRV8323_HI_C_PIN, 0);
+                digitalWrite(DRV8323_LO_C_PIN, 0);
+                pid_controller->set_setpoint(0);
+            }
         }
 
+        // STOP
         digitalWrite(DRV8323_HI_A_PIN, 0);
         digitalWrite(DRV8323_LO_A_PIN, 0);
         digitalWrite(DRV8323_HI_B_PIN, 0);
         digitalWrite(DRV8323_LO_B_PIN, 0);
         digitalWrite(DRV8323_HI_C_PIN, 0);
         digitalWrite(DRV8323_LO_C_PIN, 0);
-
-
-
 
     }
 

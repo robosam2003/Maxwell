@@ -12,6 +12,7 @@
 #include "task.h"
 #include "HallSensor.h"
 #include "pid_controller.h"
+#include "PWMInput.h"
 
 namespace Maxwell {
 
@@ -27,13 +28,15 @@ namespace Maxwell {
         // AS5047P::AS5047P* encoder;
         PIDController* pid_controller;
         triggered* trigger;
+        PWMInput* pwm_input;
+
 
 
         Maxwell(); // Constructor
 
         void setup();
 
-        void drive_hall_velocity(int velocity, int duration);
+        void drive_hall_velocity(int duration);
 
         void drive_velocity(int velocity, int duration);
 

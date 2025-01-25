@@ -10,7 +10,7 @@
 #define SENSE_CONVERSION_FACTOR  ((3.3 / 1024) * 19.0)
 #define CURRENT_SENSE_CONVERSION_FACTOR ((3.3 / 1024))
 
-
+#define MAX_PWM_PULSE_US 100000
 
 // ============ ARCHIVE ============
 //extern "C" void SystemClock_Config(void)

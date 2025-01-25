@@ -65,6 +65,11 @@ namespace Maxwell {
         }
         // Calculate electrical velocity
         uint32_t current_time = micros();
+        // if (current_time - prev_callback_time > 1000000) { // 1 second
+        //     prev_callback_time = current_time;
+        //     electrical_velocity = 0;
+        //     return;
+        // }
         float new_speed = (direction) * PI /3 / (current_time - prev_callback_time) * 1e6;
         electrical_velocity = static_cast<float>(velocity_filter->update(new_speed, current_time));
         prev_callback_time = current_time;
