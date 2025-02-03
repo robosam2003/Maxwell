@@ -25,7 +25,7 @@ namespace AS5047P {
 
         void write_reg(REGISTER regAddress, uint16_t data);  // SPI write
 
-        uint16_t get_angle(bool comp = true);
+        float get_angle(bool comp = true);
 
         uint16_t get_mag_strength();
     };

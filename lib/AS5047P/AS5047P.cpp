@@ -68,7 +68,7 @@ namespace AS5047P {
         _spi.endTransaction(); // End the SPI transaction
     }
 
-    uint16_t AS5047P::get_angle(bool comp) {
+    float AS5047P::get_angle(bool comp) {
         uint16_t angle = 0;
         if (comp) {
             angle = read_reg(REGISTER::ANGLECOM);
@@ -77,7 +77,9 @@ namespace AS5047P {
             angle = read_reg(REGISTER::ANGLEUNCOMP);
         }
         angle = angle & 0b0011111111111111; // Mask the 2 MSB bits
-        return angle;
+        float radian_angle = static_cast<float>(angle) / 16384.0 * 2 * PI;
+        float degree_angle = static_cast<float>(angle) / 16384.0 * 360;
+        return degree_angle;
     }
 
     uint16_t AS5047P::get_mag_strength() {

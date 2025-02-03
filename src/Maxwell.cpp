@@ -12,7 +12,6 @@ namespace Maxwell {
 
     Maxwell::Maxwell()  {
         SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
-        // SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
 
         driver = new DRV8323::DRV8323(
             DRV8323_CS_PIN,
