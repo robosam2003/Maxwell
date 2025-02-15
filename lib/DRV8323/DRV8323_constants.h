@@ -52,6 +52,14 @@ enum PWM_MODE {
     PWM_INDEPENDENT =   0b11
 };
 
+enum CSA_GAIN {
+    GAIN_5_V_V =   0b00,
+    GAIN_10_V_V =  0b01,
+    GAIN_20_V_V =  0b10,
+    GAIN_40_V_V =  0b11
+};
+
+
 enum DIRECTION {
     FORWARD =   0b0,
     REVERSE =   0b1

@@ -16,7 +16,6 @@ private:
     float _prev_error;
     float _integral;
     float _derivative;
-    float _output;
     uint32_t _prev_input_time;
     float _prev_input;
 
@@ -24,6 +23,8 @@ private:
     float _max_integral;  // Anti-windup control
 
 public:
+    float _output;
+
     PIDController(float kp, float ki, float kd, float setpoint, float max_output, float max_integral);
 
     float update(float input);

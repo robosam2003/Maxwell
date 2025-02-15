@@ -26,9 +26,9 @@
        </attribute>
        <layout class="QGridLayout" name="gridLayout_3">
         <item row="1" column="1">
-         <widget class="PlotWidget" name="widget" native="true">
+         <widget class="PlotWidget" name="current_plots" native="true">
           <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
             <horstretch>0</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
@@ -42,7 +42,39 @@
          </widget>
         </item>
         <item row="2" column="1">
-         <widget class="PlotWidget" name="widget_2" native="true">
+         <widget class="PlotWidget" name="voltage_plots" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1" colspan="2">
+         <widget class="QLabel" name="fault_codes_label">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>13</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Fault Codes:
+
+</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="3" rowspan="2">
+         <widget class="PlotWidget" name="rotorWidget" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
             <horstretch>0</horstretch>
@@ -51,11 +83,8 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="2" rowspan="2">
-         <widget class="RotorView" name="rotorview"/>
-        </item>
-        <item row="0" column="0" colspan="3">
-         <widget class="QFrame" name="frame">
+        <item row="0" column="0" colspan="4">
+         <widget class="QFrame" name="titleFrame">
           <property name="maximumSize">
            <size>
             <width>16777215</width>
@@ -154,13 +183,6 @@
           </layout>
          </widget>
         </item>
-        <item row="1" column="0" rowspan="2">
-         <widget class="QLabel" name="label_3">
-          <property name="text">
-           <string>TextLabel</string>
-          </property>
-         </widget>
-        </item>
        </layout>
       </widget>
       <widget class="QWidget" name="tab_2">
@@ -179,11 +201,6 @@
    <extends>QWidget</extends>
    <header>pyqtgraph</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>RotorView</class>
-   <extends>QGraphicsView</extends>
-   <header>rotorview.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

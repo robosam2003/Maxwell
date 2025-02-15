@@ -46,12 +46,13 @@ public:
 
     void set_SYNC_rectification(bool enable);
 
+    void set_current_gain(CSA_GAIN gain);
+
     void enable_CPUV_Fault(bool enable);
 
     void enable_GDF(bool enable);
 
     void clear_fault();
-
 
     void default_configuration();
 

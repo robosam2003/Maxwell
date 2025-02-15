@@ -37,23 +37,23 @@ class Ui_MainWindow(object):
         self.tab.setObjectName(u"tab")
         self.gridLayout_3 = QGridLayout(self.tab)
         self.gridLayout_3.setObjectName(u"gridLayout_3")
-        self.widget = PlotWidget(self.tab)
-        self.widget.setObjectName(u"widget")
-        sizePolicy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.current_plots = PlotWidget(self.tab)
+        self.current_plots.setObjectName(u"current_plots")
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.widget.sizePolicy().hasHeightForWidth())
-        self.widget.setSizePolicy(sizePolicy)
-        self.widget.setMinimumSize(QSize(0, 0))
+        sizePolicy.setHeightForWidth(self.current_plots.sizePolicy().hasHeightForWidth())
+        self.current_plots.setSizePolicy(sizePolicy)
+        self.current_plots.setMinimumSize(QSize(0, 0))
 
-        self.gridLayout_3.addWidget(self.widget, 1, 1, 1, 1)
+        self.gridLayout_3.addWidget(self.current_plots, 1, 1, 1, 1)
 
-        self.widget_2 = PlotWidget(self.tab)
-        self.widget_2.setObjectName(u"widget_2")
-        sizePolicy.setHeightForWidth(self.widget_2.sizePolicy().hasHeightForWidth())
-        self.widget_2.setSizePolicy(sizePolicy)
+        self.voltage_plots = PlotWidget(self.tab)
+        self.voltage_plots.setObjectName(u"voltage_plots")
+        sizePolicy.setHeightForWidth(self.voltage_plots.sizePolicy().hasHeightForWidth())
+        self.voltage_plots.setSizePolicy(sizePolicy)
 
-        self.gridLayout_3.addWidget(self.widget_2, 2, 1, 1, 1)
+        self.gridLayout_3.addWidget(self.voltage_plots, 2, 1, 1, 1)
 
         self.rotorview = RotorView(self.tab)
         self.rotorview.setObjectName(u"rotorview")
@@ -106,10 +106,19 @@ class Ui_MainWindow(object):
 
         self.gridLayout_3.addWidget(self.frame, 0, 0, 1, 3)
 
-        self.label_3 = QLabel(self.tab)
-        self.label_3.setObjectName(u"label_3")
+        self.fault_codes_label = QLabel(self.tab)
+        self.fault_codes_label.setObjectName(u"fault_codes_label")
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        sizePolicy1.setHorizontalStretch(0)
+        sizePolicy1.setVerticalStretch(0)
+        sizePolicy1.setHeightForWidth(self.fault_codes_label.sizePolicy().hasHeightForWidth())
+        self.fault_codes_label.setSizePolicy(sizePolicy1)
+        font2 = QFont()
+        font2.setPointSize(13)
+        font2.setBold(True)
+        self.fault_codes_label.setFont(font2)
 
-        self.gridLayout_3.addWidget(self.label_3, 1, 0, 2, 1)
+        self.gridLayout_3.addWidget(self.fault_codes_label, 3, 1, 1, 2)
 
         self.tabWidget.addTab(self.tab, "")
         self.tab_2 = QWidget()
@@ -132,7 +141,9 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"MainWindow", None))
         self.label_2.setText(QCoreApplication.translate("MainWindow", u"ROBOSAM", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"Maxwell Studio", None))
-        self.label_3.setText(QCoreApplication.translate("MainWindow", u"TextLabel", None))
+        self.fault_codes_label.setText(QCoreApplication.translate("MainWindow", u"Fault Codes:\n"
+"\n"
+"", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QCoreApplication.translate("MainWindow", u"Tab 1", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), QCoreApplication.translate("MainWindow", u"Tab 2", None))
     # retranslateUi

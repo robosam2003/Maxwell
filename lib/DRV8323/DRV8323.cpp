@@ -172,11 +172,20 @@ namespace DRV8323 {
         write_reg(REGISTER::DRIVER_CONTROL, data);
     }
 
+    void DRV8323::set_current_gain(CSA_GAIN gain) {
+        uint16_t data = read_reg(REGISTER::CSA_CONTROL);
+        data = data & 0b11100111111; // Mask the CSA_GAIN bits
+        data = data | (gain << 5);   // Set the CSA_GAIN bits
+        write_reg(REGISTER::CSA_CONTROL, data);
+    }
+
+
     void DRV8323::default_configuration() {
         enable(true);
         set_pwm_mode(PWM_MODE::PWM_6x);
         enable_CPUV_Fault(false);
         enable_GDF(false);
+        set_current_gain(CSA_GAIN::GAIN_40_V_V);
     }
 
     void DRV8323::enable_CPUV_Fault(bool enable) {
@@ -196,7 +205,6 @@ namespace DRV8323 {
         uint16_t data = read_reg(REGISTER::DRIVER_CONTROL);
         setBit(&data, 8, enable ? 0 : 1);
         write_reg(REGISTER::DRIVER_CONTROL, data);
-
     }
 
     void DRV8323::clear_fault() {

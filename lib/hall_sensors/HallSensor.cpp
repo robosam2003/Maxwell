@@ -28,7 +28,7 @@ namespace Maxwell {
         hall_code = hall_a_state << 2 | hall_b_state << 1 | hall_c_state; // 0-7
         rotor_sector = hallcode_to_index[hall_code];
 
-        velocity_filter = new RCFilter(20); // 1kHz cutoff frequency
+        velocity_filter = new RCFilter(20);
     }
 
 

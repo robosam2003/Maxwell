@@ -7,11 +7,10 @@
 
 
 class RCFilter {
-private:
+public:
     double RC; //equal to R*C
     double prev_value;
     unsigned long prev_update_time_us;
-public:
     /**
      * @brief Construct a new RC Filter object
      * @param cuttoff_freq (Hz)

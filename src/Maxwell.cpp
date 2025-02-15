@@ -4,9 +4,11 @@
 
 #include "Maxwell.h"
 
+#include <FreeRTOS/Source/include/FreeRTOS.h>
+
 namespace Maxwell {
     #define MAX_LEVEL 80  // out of 255
-    #define MAX_SPEED 1500 // electrical rads/s
+    #define MAX_SPEED 2000 // electrical rads/s
 
 
 
@@ -64,8 +66,35 @@ namespace Maxwell {
         digitalWrite(DRV8323_LO_C_PIN, LOW);
     }
 
-    void Maxwell::drive_hall_velocity() { // velocity is in electrical rads/s, duration is in ms
+    void Maxwell::state_feedback() {
+        String text = "";
+        // text += static_cast<String>(hall_sensor->hall_code); text += "/";
+        text += static_cast<String>(hall_sensor->rotor_sector); text += "/";
+        text += static_cast<String>(hall_sensor->electrical_velocity); text += "/";
+        current_sensors->read();
+        text += static_cast<String>(current_sensors->get_current_a()); text += "/";
+        text += static_cast<String>(current_sensors->get_current_b()); text += "/";
+        text += static_cast<String>(current_sensors->get_current_c()); text += "/";
+        text += static_cast<String>(current_sensors->get_total_current()); text += "/";
+        text += static_cast<String>(pwm_input->read_percentage()); text += "/";
+        text += static_cast<String>(0.0); text += "/";
+        // text += static_cast<String>(pid_controller->_output); text += "/";
 
+        text += static_cast<String>(driver->get_fault_status_1_string()); text += "/";
+        text += static_cast<String>(driver->get_fault_status_2_string()); text += "/";
+
+        // calculate checksum
+        int checksum = 0;
+        for (int i = 0; i < text.length(); i++) {
+            checksum += text[i]; // add the ASCII value of each character
+        }
+        checksum = checksum % 256;
+        text += static_cast<String>(checksum);
+        Serial.println(text);
+    }
+
+
+    void Maxwell::drive_hall_velocity() { // velocity is in electrical rads/s, duration is in ms
         uint8_t six_step_commutation_states_ccw[6][6] = {
             {0, 0, 1, 0, 0, 1}, // 0 - B->C // 110
             {1, 0, 0, 0, 0, 1}, // 1 - A->C // 100
@@ -75,7 +104,6 @@ namespace Maxwell {
             {0, 1, 1, 0, 0, 0}  // 5 - B->A // 010
 
         };
-
 
         // Running in 6x PWM mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
@@ -101,21 +129,24 @@ namespace Maxwell {
         uint32_t start = millis();
         bool aligned = false;
         int8_t old_rotor_sector = hall_sensor->rotor_sector;
+        current_sensors->calibrate_offsets();
 
         while (true) {
             if (pwm_input->read_percentage() > 5) {
                 uint32_t velocity = map(pwm_input->read_percentage(), 0, 100, 0, MAX_SPEED);
                 pid_controller->set_setpoint(static_cast<float>(velocity));
 
-                if (not aligned) {
-                    // ALIGN
-                    analogWrite(DRV8323_HI_A_PIN, 100);
-                    digitalWrite(DRV8323_LO_B_PIN, HIGH);
-                    digitalWrite(DRV8323_LO_C_PIN, HIGH);
-                    delay(100);
-                    Serial.println("Aligned");
-                    aligned = true;
-                }
+
+
+                // if (not aligned) {
+                //     // ALIGN
+                //     analogWrite(DRV8323_HI_A_PIN, 100);
+                //     digitalWrite(DRV8323_LO_B_PIN, HIGH);
+                //     digitalWrite(DRV8323_LO_C_PIN, HIGH);
+                //     delay(100);
+                //     Serial.println("Aligned");
+                //     aligned = true;
+                // }
 
                 float speed = hall_sensor->electrical_velocity;
                 float output = pid_controller->update(speed);
@@ -130,16 +161,24 @@ namespace Maxwell {
                 analogWrite(DRV8323_HI_C_PIN, six_step_commutation_states_ccw[step][4] * level);
                 digitalWrite(DRV8323_LO_C_PIN, six_step_commutation_states_ccw[step][5]);
 
-                if (hall_sensor->rotor_sector != old_rotor_sector) {
-                    pid_controller->print_state();
-                }
+                // if (hall_sensor->rotor_sector != old_rotor_sector) {
+                //     pid_controller->print_state();
+                // }
                 old_rotor_sector = hall_sensor->rotor_sector;
             }
             else {
                 aligned = false;
                 all_off();
                 pid_controller->set_setpoint(0);
+                // current_sensors->calibrate_offsets();
             }
+            current_sensors->read();
+            // Serial.print(current_sensors->get_current_a()); Serial.print(", ");
+            // Serial.print(current_sensors->get_current_b()); Serial.print(", ");
+            // Serial.println(current_sensors->get_current_c());
+            // float total_current = current_sensors->get_total_current();
+            // Serial.println(total_current);
+            state_feedback();
         }
 
         // STOP

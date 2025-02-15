@@ -13,6 +13,7 @@
 #include "HallSensor.h"
 #include "pid_controller.h"
 #include "PWMInput.h"
+#include "current_sensors.h"
 
 namespace Maxwell {
 
@@ -20,6 +21,7 @@ namespace Maxwell {
         bool phases[3];
         bool zero_cross[3];
     };
+
 
     class Maxwell {
     public:
@@ -29,12 +31,14 @@ namespace Maxwell {
         PIDController* pid_controller;
         triggered* trigger;
         PWMInput* pwm_input;
-
+        CurrentSensors* current_sensors;
 
 
         Maxwell(); // Constructor
 
         void setup();
+
+        void state_feedback();
 
         void drive_hall_velocity();
 
