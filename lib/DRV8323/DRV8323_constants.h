@@ -59,6 +59,9 @@ enum CSA_GAIN {
     GAIN_40_V_V =  0b11
 };
 
+inline uint8_t csa_gain_to_int[4] = {5, 10, 20, 40};
+
+
 
 enum DIRECTION {
     FORWARD =   0b0,

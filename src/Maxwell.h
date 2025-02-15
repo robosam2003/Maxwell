@@ -31,8 +31,6 @@ namespace Maxwell {
         PIDController* pid_controller;
         triggered* trigger;
         PWMInput* pwm_input;
-        CurrentSensors* current_sensors;
-
 
         Maxwell(); // Constructor
 

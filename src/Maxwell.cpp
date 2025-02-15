@@ -71,11 +71,11 @@ namespace Maxwell {
         // text += static_cast<String>(hall_sensor->hall_code); text += "/";
         text += static_cast<String>(hall_sensor->rotor_sector); text += "/";
         text += static_cast<String>(hall_sensor->electrical_velocity); text += "/";
-        current_sensors->read();
-        text += static_cast<String>(current_sensors->get_current_a()); text += "/";
-        text += static_cast<String>(current_sensors->get_current_b()); text += "/";
-        text += static_cast<String>(current_sensors->get_current_c()); text += "/";
-        text += static_cast<String>(current_sensors->get_total_current()); text += "/";
+        driver->current_sensors->read();
+        text += static_cast<String>(driver->current_sensors->get_current_a()); text += "/";
+        text += static_cast<String>(driver->current_sensors->get_current_b()); text += "/";
+        text += static_cast<String>(driver->current_sensors->get_current_c()); text += "/";
+        text += static_cast<String>(driver->current_sensors->get_total_current()); text += "/";
         text += static_cast<String>(pwm_input->read_percentage()); text += "/";
         text += static_cast<String>(0.0); text += "/";
         // text += static_cast<String>(pid_controller->_output); text += "/";
@@ -129,7 +129,7 @@ namespace Maxwell {
         uint32_t start = millis();
         bool aligned = false;
         int8_t old_rotor_sector = hall_sensor->rotor_sector;
-        current_sensors->calibrate_offsets();
+        driver->current_sensors->calibrate_offsets();
 
         while (true) {
             if (pwm_input->read_percentage() > 5) {
@@ -172,12 +172,6 @@ namespace Maxwell {
                 pid_controller->set_setpoint(0);
                 // current_sensors->calibrate_offsets();
             }
-            current_sensors->read();
-            // Serial.print(current_sensors->get_current_a()); Serial.print(", ");
-            // Serial.print(current_sensors->get_current_b()); Serial.print(", ");
-            // Serial.println(current_sensors->get_current_c());
-            // float total_current = current_sensors->get_total_current();
-            // Serial.println(total_current);
             state_feedback();
         }
 
@@ -188,7 +182,6 @@ namespace Maxwell {
         digitalWrite(DRV8323_LO_B_PIN, 0);
         digitalWrite(DRV8323_HI_C_PIN, 0);
         digitalWrite(DRV8323_LO_C_PIN, 0);
-
     }
 
 
