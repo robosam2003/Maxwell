@@ -76,7 +76,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
     def setup_graphs(self):
         BUFFER_SIZE = 1000
-        self.current_plots.setLabel('left', 'Current', 'A')
+        self.current_plots.setLabel('left', 'Current')
         self.current_plots.setLabel('bottom', 'Sample')
         self.current_plots.setTitle('Current Plot')
         self.current_plots.showGrid(x=True, y=True)
@@ -100,6 +100,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         while True:
             try:
                 line = self.ser.readline().decode('utf-8').strip()
+                print(line)
                 data = line.split('/')
                 if len(data) != 11:
                     print(f'Invalid data: {data}')
@@ -142,17 +143,17 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
     def update_state(self, data):
         self.state.time = time.time() - self.start_time
-        self.state.rotor_sector = int(data[0])
-        self.state.electrical_velocity = float(data[1])
+        # self.state.rotor_sector = int(data[0])
+        # self.state.electrical_velocity = float(data[1])
         self.state.current_a = float(data[2])
         self.state.current_b = float(data[3])
         self.state.current_c = float(data[4])
         self.state.total_current = float(data[5])
-        self.state.pwm_duty = float(data[6])
-        self.state.pid_output = float(data[7])
+        # self.state.pwm_duty = float(data[6])
+        # self.state.pid_output = float(data[7])
 
-        self.state.fault_1 = data[8]
-        self.state.fault_2 = data[9]
+        # self.state.fault_1 = data[8]
+        # self.state.fault_2 = data[9]
 
         self.fault_codes_label.setText(f'Fault 1: {self.state.fault_1}\nFault 2: {self.state.fault_2}')
 
@@ -171,12 +172,12 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         self.current_plots.plot(self.sample_circular_buffer, self.current_a_circular_buffer,        pen=pg.mkPen(color=(255, 255, 0), width=2), clear=True, name='Current A')
         self.current_plots.plot(self.sample_circular_buffer, self.current_b_circular_buffer,        pen=pg.mkPen(color=(255, 0, 255), width=2), clear=False, name='Current B')
         self.current_plots.plot(self.sample_circular_buffer, self.current_c_circular_buffer,        pen=pg.mkPen(color=(0, 0, 255), width=2),   clear=False, name='Current C')
-        self.current_plots.plot(self.sample_circular_buffer, self.total_current_circular_buffer,    pen=pg.mkPen(color=(255, 0, 0), width=2),   clear=False, name='Total Current')
+        # self.current_plots.plot(self.sample_circular_buffer, self.total_current_circular_buffer,    pen=pg.mkPen(color=(255, 0, 0), width=2),   clear=False, name='Total Current')
 
         self.voltage_plots.plot(self.sample_circular_buffer, self.voltage_a_circular_buffer,        pen=pg.mkPen(color=(255, 255, 0), width=2), clear=True, name='Voltage A')
         self.voltage_plots.plot(self.sample_circular_buffer, self.voltage_b_circular_buffer,        pen=pg.mkPen(color=(255, 0, 255), width=2), clear=False, name='Voltage B')
         self.voltage_plots.plot(self.sample_circular_buffer, self.voltage_c_circular_buffer,        pen=pg.mkPen(color=(0, 0, 255), width=2),   clear=False, name='Voltage C')
-        self.voltage_plots.plot(self.sample_circular_buffer, self.input_voltage_circular_buffer,    pen=pg.mkPen(color=(255, 0, 0), width=2),   clear=False, name='Input Voltage')
+        # self.voltage_plots.plot(self.sample_circular_buffer, self.input_voltage_circular_buffer,    pen=pg.mkPen(color=(255, 0, 0), width=2),   clear=False, name='Input Voltage')
 
         # Legends
         self.current_plots.addLegend(offset=(0, 0))

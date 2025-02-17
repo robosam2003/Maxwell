@@ -186,13 +186,27 @@ namespace DRV8323 {
         current_sensors->set_csa_gain(gain);
     }
 
+    void DRV8323::perform_current_sense_calibration() {
+        uint16_t data = read_reg(REGISTER::CSA_CONTROL);
+        setBit(&data, 4, 1);  // Channel A
+        setBit(&data, 3, 1);  // Channel B
+        setBit(&data, 2, 1);  // Channel C
+        write_reg(REGISTER::CSA_CONTROL, data);
+        delay(100);  // Wait for calibration to complete
+        setBit(&data, 4, 0);  // Channel A
+        setBit(&data, 3, 0);  // Channel B
+        setBit(&data, 2, 0);  // Channel C
+        write_reg(REGISTER::CSA_CONTROL, data);
+        set_current_gain(_csa_gain);  // Reset the CSA gain to whatever it was.
+    }
+
 
     void DRV8323::default_configuration() {
         enable(true);
         set_pwm_mode(PWM_MODE::PWM_6x);
         enable_CPUV_Fault(false);
         enable_GDF(false);
-        set_current_gain(CSA_GAIN::GAIN_40_V_V);
+        set_current_gain(CSA_GAIN::GAIN_5_V_V);
     }
 
     void DRV8323::enable_CPUV_Fault(bool enable) {

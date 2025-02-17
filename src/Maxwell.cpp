@@ -20,6 +20,7 @@ namespace Maxwell {
             SPI_1,
             1000000,
             DRV8323_GATE_EN_PIN);
+        driver->default_configuration();
 
         trigger = new triggered{false, false, false};
         pid_controller = new PIDController(0.2, 2, 0,

@@ -16,16 +16,19 @@ CurrentSensors::CurrentSensors(int pin_a, int pin_b, int pin_c, DRV8323::CSA_GAI
   _offset_b = 0.0;
   _offset_c = 0.0;
 
-  int cuttoff_freq = 5;
+  double cuttoff_freq = 1;
   _filter_a = new RCFilter(cuttoff_freq);
   _filter_b = new RCFilter(cuttoff_freq);
   _filter_c = new RCFilter(cuttoff_freq);
 
   _csa_gain = gain;
 
-  pinMode(_pin_a, INPUT);
-  pinMode(_pin_b, INPUT);
-  pinMode(_pin_c, INPUT);
+  // Set analog read resolution to 12 bits
+
+  // set pins
+  pinMode(_pin_a, INPUT_ANALOG);
+  pinMode(_pin_b, INPUT_ANALOG);
+  pinMode(_pin_c, INPUT_ANALOG);
   // calibrate_offsets();
 }
 
@@ -67,9 +70,12 @@ void CurrentSensors::read() {
   double v_c = (analogRead(_pin_c)) * CURRENT_SENSE_CONVERSION_FACTOR;
   uint32_t current_time_us = micros();
 
-  _current_a = _filter_a->update((3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a, current_time_us);
-  _current_b = _filter_b->update((3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b, current_time_us);
-  _current_c = _filter_c->update((3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c, current_time_us);
+  // _current_a = _filter_a->update((3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a, current_time_us);
+  // _current_b = _filter_b->update((3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b, current_time_us);
+  // _current_c = _filter_c->update((3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c, current_time_us);
+  _current_a = (3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a;
+  _current_b = (3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b;
+  _current_c = (3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c;
 }
 
 double CurrentSensors::get_current_a() {
@@ -84,7 +90,7 @@ double CurrentSensors::get_current_c() {
 }
 
 double CurrentSensors::get_total_current() {
-  return abs(_current_a) + abs(_current_b) + abs(_current_c);
+  return _current_a + _current_b + _current_c;
 }
 
 

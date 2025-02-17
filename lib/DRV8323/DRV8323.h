@@ -27,7 +27,7 @@ public:
 
     bool enabled = false;
 
-    CSA_GAIN _csa_gain = CSA_GAIN::GAIN_40_V_V;
+    CSA_GAIN _csa_gain = CSA_GAIN::GAIN_5_V_V;
     CurrentSensors* current_sensors;
     // Constructor
     DRV8323(byte CS, SPIClass& spi, uint32_t spiFreq, byte gate_enable_pin);
@@ -50,6 +50,8 @@ public:
     void set_SYNC_rectification(bool enable);
 
     void set_current_gain(CSA_GAIN gain);
+
+    void perform_current_sense_calibration();
 
     void enable_CPUV_Fault(bool enable);
 
