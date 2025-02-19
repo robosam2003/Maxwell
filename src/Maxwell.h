@@ -22,21 +22,60 @@ namespace Maxwell {
         bool zero_cross[3];
     };
 
+    struct FOC {
+        PIDController* d_pid;
+        PIDController* q_pid;
+    };
+
+    struct alpha_beta_struct {
+        float alpha;
+        float beta;
+    };
+
+    struct dq_struct {
+        float d;
+        float q;
+    };
+
+    struct PhaseCurrents {
+        float current_a;
+        float current_b;
+        float current_c;
+    };
+
+    struct Currents {
+        PhaseCurrents phase_currents;
+        alpha_beta_struct alpha_beta;
+        dq_struct dq;
+    };
+
 
     class Maxwell {
     public:
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
-        // AS5047P::AS5047P* encoder;
+        AS5047P::AS5047P* encoder;
         PIDController* pid_controller;
         triggered* trigger;
         PWMInput* pwm_input;
+        FOC* foc;
+        Currents* curr_struct;
 
         Maxwell(); // Constructor
 
         void setup();
 
         void state_feedback();
+
+        void foc_position_control();
+
+        alpha_beta_struct clarke_transform(PhaseCurrents currents);  // Currents to alpha-beta
+
+        dq_struct park_transform(alpha_beta_struct ab_vec);  // Alpha-beta to dq
+
+        alpha_beta_struct reverse_park_transform(dq_struct dq_vec);  // dq to alpha-beta
+
+        PhaseCurrents reverse_clarke_transform(alpha_beta_struct ab_vec);   // alpha-beta to currents
 
         void drive_hall_velocity();
 

@@ -24,7 +24,7 @@ from dataclasses import dataclass
 @dataclass
 class State:
     time:                float  = 0.0
-    rotor_sector:        int    = 0
+    rotor_sector:        float  = 0.0
     electrical_velocity: float  = 0.0
     mechanical_velocity: float  = 0.0
     current_a:           float  = 0.0
@@ -56,7 +56,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         super(MaxwellStudio, self).__init__(parent)
         self.setupUi(self)
 
-        self.ser = serial.Serial('/dev/MAXWELL', 115200)
+        self.ser = serial.Serial('/dev/MAXWELL', 921600)
 
         self.state = State()
         self.start_time = time.time()
@@ -72,10 +72,10 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
         self.update_plots_timer = QTimer()
         self.update_plots_timer.timeout.connect(self.update_plots)
-        self.update_plots_timer.start(1)
+        self.update_plots_timer.start(10)
 
     def setup_graphs(self):
-        BUFFER_SIZE = 1000
+        BUFFER_SIZE = 500
         self.current_plots.setLabel('left', 'Current')
         self.current_plots.setLabel('bottom', 'Sample')
         self.current_plots.setTitle('Current Plot')
@@ -87,7 +87,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         self.total_current_circular_buffer = deque(maxlen=BUFFER_SIZE)
 
 
-        self.voltage_plots.setLabel('left', 'Voltage', 'V')
+        self.voltage_plots.setLabel('left', 'Angle', 'degrees')
         self.voltage_plots.setLabel('bottom', 'Sample')
         self.voltage_plots.setTitle('Voltage Plot')
         self.voltage_plots.showGrid(x=True, y=True)
@@ -95,6 +95,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         self.voltage_b_circular_buffer = deque(maxlen=BUFFER_SIZE)
         self.voltage_c_circular_buffer = deque(maxlen=BUFFER_SIZE)
         self.input_voltage_circular_buffer = deque(maxlen=BUFFER_SIZE)
+        self.rotor_angle_circular_buffer = deque(maxlen=BUFFER_SIZE)
 
     def update(self):
         while True:
@@ -143,7 +144,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
     def update_state(self, data):
         self.state.time = time.time() - self.start_time
-        # self.state.rotor_sector = int(data[0])
+        self.state.rotor_sector = float(data[0])
         # self.state.electrical_velocity = float(data[1])
         self.state.current_a = float(data[2])
         self.state.current_b = float(data[3])
@@ -152,8 +153,8 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         # self.state.pwm_duty = float(data[6])
         # self.state.pid_output = float(data[7])
 
-        # self.state.fault_1 = data[8]
-        # self.state.fault_2 = data[9]
+        self.state.fault_1 = data[8]
+        self.state.fault_2 = data[9]
 
         self.fault_codes_label.setText(f'Fault 1: {self.state.fault_1}\nFault 2: {self.state.fault_2}')
 
@@ -163,20 +164,21 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         self.current_c_circular_buffer.append(self.state.current_c)
         self.total_current_circular_buffer.append(self.state.total_current)
 
-        self.voltage_a_circular_buffer.append(self.state.voltage_a)
-        self.voltage_b_circular_buffer.append(self.state.voltage_b)
-        self.voltage_c_circular_buffer.append(self.state.voltage_c)
-        self.input_voltage_circular_buffer.append(self.state.input_voltage)
+        # self.voltage_a_circular_buffer.append(self.state.voltage_a)
+        # self.voltage_b_circular_buffer.append(self.state.voltage_b)
+        # self.voltage_c_circular_buffer.append(self.state.voltage_c)
+        # self.input_voltage_circular_buffer.append(self.state.input_voltage)
+        self.rotor_angle_circular_buffer.append(self.state.rotor_sector)
 
     def update_plots(self):
-        self.current_plots.plot(self.sample_circular_buffer, self.current_a_circular_buffer,        pen=pg.mkPen(color=(255, 255, 0), width=2), clear=True, name='Current A')
-        self.current_plots.plot(self.sample_circular_buffer, self.current_b_circular_buffer,        pen=pg.mkPen(color=(255, 0, 255), width=2), clear=False, name='Current B')
-        self.current_plots.plot(self.sample_circular_buffer, self.current_c_circular_buffer,        pen=pg.mkPen(color=(0, 0, 255), width=2),   clear=False, name='Current C')
+        self.current_plots.plot(self.sample_circular_buffer, self.current_a_circular_buffer,        pen=pg.mkPen(color=(255, 255, 0), width=2), clear=True, name='D Current')
+        self.current_plots.plot(self.sample_circular_buffer, self.current_b_circular_buffer,        pen=pg.mkPen(color=(255, 0, 255), width=2), clear=False, name='Q Current')
+        # self.current_plots.plot(self.sample_circular_buffer, self.current_c_circular_buffer,        pen=pg.mkPen(color=(0, 0, 255), width=2),   clear=False, name='Magnitude')
         # self.current_plots.plot(self.sample_circular_buffer, self.total_current_circular_buffer,    pen=pg.mkPen(color=(255, 0, 0), width=2),   clear=False, name='Total Current')
 
-        self.voltage_plots.plot(self.sample_circular_buffer, self.voltage_a_circular_buffer,        pen=pg.mkPen(color=(255, 255, 0), width=2), clear=True, name='Voltage A')
-        self.voltage_plots.plot(self.sample_circular_buffer, self.voltage_b_circular_buffer,        pen=pg.mkPen(color=(255, 0, 255), width=2), clear=False, name='Voltage B')
-        self.voltage_plots.plot(self.sample_circular_buffer, self.voltage_c_circular_buffer,        pen=pg.mkPen(color=(0, 0, 255), width=2),   clear=False, name='Voltage C')
+        self.voltage_plots.plot(self.sample_circular_buffer, self.rotor_angle_circular_buffer,        pen=pg.mkPen(color=(255, 255, 0), width=2), clear=True, name='Rotor Angle')
+        # self.voltage_plots.plot(self.sample_circular_buffer, self.voltage_b_circular_buffer,        pen=pg.mkPen(color=(255, 0, 255), width=2), clear=False, name='Voltage B')
+        # self.voltage_plots.plot(self.sample_circular_buffer, self.voltage_c_circular_buffer,        pen=pg.mkPen(color=(0, 0, 255), width=2),   clear=False, name='Voltage C')
         # self.voltage_plots.plot(self.sample_circular_buffer, self.input_voltage_circular_buffer,    pen=pg.mkPen(color=(255, 0, 0), width=2),   clear=False, name='Input Voltage')
 
         # Legends

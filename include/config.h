@@ -9,6 +9,7 @@
 #define HARDWARE_V1_0
 #define SENSE_CONVERSION_FACTOR  ((3.3 / 1024) * 19.0)
 #define CURRENT_SENSE_CONVERSION_FACTOR ((3.3 / 4096))
+#define POLE_PAIRS_6374 7 // 14 poles = 7 pole pairs
 
 #define MAX_PWM_PULSE_US 100000
 

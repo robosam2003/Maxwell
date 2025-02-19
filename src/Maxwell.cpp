@@ -14,19 +14,35 @@ namespace Maxwell {
 
     Maxwell::Maxwell()  {
         SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
-
+        SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
         driver = new DRV8323::DRV8323(
             DRV8323_CS_PIN,
             SPI_1,
             1000000,
             DRV8323_GATE_EN_PIN);
         driver->default_configuration();
+        encoder = new AS5047P::AS5047P(
+            AS5047P_CS_PIN,
+            SPI_2,
+            1000000);
 
         trigger = new triggered{false, false, false};
         pid_controller = new PIDController(0.2, 2, 0,
             0,
             static_cast<float>(MAX_LEVEL),
             30);
+
+        foc = new FOC{
+            new PIDController(1, 0.1, 0,
+            0.0,
+            5.0,
+            2.0),
+
+            new PIDController(1, 0.1, 0,
+            0.0,
+            5.0,
+            2.0)};
+        curr_struct = new Currents{0, 0, 0, 0, 0, 0, 0};
     }
 
     void Maxwell::setup() {
@@ -70,13 +86,14 @@ namespace Maxwell {
     void Maxwell::state_feedback() {
         String text = "";
         // text += static_cast<String>(hall_sensor->hall_code); text += "/";
-        text += static_cast<String>(hall_sensor->rotor_sector); text += "/";
-        text += static_cast<String>(hall_sensor->electrical_velocity); text += "/";
-        driver->current_sensors->read();
-        text += static_cast<String>(driver->current_sensors->get_current_a()); text += "/";
-        text += static_cast<String>(driver->current_sensors->get_current_b()); text += "/";
-        text += static_cast<String>(driver->current_sensors->get_current_c()); text += "/";
-        text += static_cast<String>(driver->current_sensors->get_total_current()); text += "/";
+        text += static_cast<String>(encoder->get_angle()); text += "/";
+        // text += static_cast<String>(hall_sensor->electrical_velocity);
+        text += "/";
+        // driver->current_sensors->read();
+        text += static_cast<String>(curr_struct->dq.d); text += "/";
+        text += static_cast<String>(curr_struct->dq.q); text += "/";
+        text += static_cast<String>(curr_struct->alpha_beta.alpha); text += "/";
+        text += static_cast<String>(curr_struct->alpha_beta.beta); text += "/";
         text += static_cast<String>(pwm_input->read_percentage()); text += "/";
         text += static_cast<String>(0.0); text += "/";
         // text += static_cast<String>(pid_controller->_output); text += "/";
@@ -93,6 +110,186 @@ namespace Maxwell {
         text += static_cast<String>(checksum);
         Serial.println(text);
     }
+
+    void actuate_currents(PhaseCurrents command_currents) {
+        double current_a = command_currents.current_a;
+        double current_b = command_currents.current_b;
+        double current_c = command_currents.current_c;
+
+        double input_voltage = 12.0; // 12V
+        double max_current = 4.0; // 4A
+        double phase_resistance = 0.7; // 0.7 ohms
+        // int max_level = max_current * phase_resistance / input_voltage * 255;
+        int max_level = 10;
+
+        int level_a = static_cast<int>(abs(current_a) * phase_resistance / input_voltage * 255);
+        int level_b = static_cast<int>(abs(current_b) * phase_resistance / input_voltage * 255);
+        int level_c = static_cast<int>(abs(current_c) * phase_resistance / input_voltage * 255);
+        level_a = constrain(level_a, -max_level, max_level);
+        level_b = constrain(level_b, -max_level, max_level);
+        level_c = constrain(level_c, -max_level, max_level);
+
+        if (current_a > 0) {
+            analogWrite(DRV8323_HI_A_PIN, level_a);
+            digitalWrite(DRV8323_LO_A_PIN, LOW);
+        }
+        else {
+            analogWrite(DRV8323_HI_A_PIN, LOW);
+            digitalWrite(DRV8323_LO_A_PIN, level_a);
+        }
+        if (current_b > 0) {
+            analogWrite(DRV8323_HI_B_PIN, level_b);
+            digitalWrite(DRV8323_LO_B_PIN, LOW);
+        }
+        else {
+            analogWrite(DRV8323_HI_B_PIN, LOW);
+            digitalWrite(DRV8323_LO_B_PIN, level_b);
+        }
+        if (current_c > 0) {
+            analogWrite(DRV8323_HI_C_PIN, level_c);
+            digitalWrite(DRV8323_LO_C_PIN, LOW);
+        }
+        else {
+            analogWrite(DRV8323_HI_C_PIN, LOW);
+            digitalWrite(DRV8323_LO_C_PIN, level_c);
+        }
+    }
+
+    void Maxwell::foc_position_control() {
+        // Running in 6x PWM mode
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
+
+        // Enable the driver
+        driver->enable(true);
+
+        int dir = MOTOR_DIRECTION::CW;
+        // // ALIGN
+        analogWrite(DRV8323_HI_A_PIN, 50);
+        digitalWrite(DRV8323_LO_B_PIN, HIGH);
+        digitalWrite(DRV8323_LO_C_PIN, HIGH);
+        delay(100);
+
+        all_off();
+
+        uint32_t start = millis();
+        uint32_t duration = 10000;
+        // for (; millis() - start < duration;) {
+        foc->d_pid->set_setpoint(1);
+        foc->q_pid->set_setpoint(0);
+        while (true) {
+            // holding position mode: d vector is 1, q vector is 0
+
+
+            // Get motor currents
+            driver->current_sensors->read();
+            PhaseCurrents phase_currents = {driver->current_sensors->get_current_a(),
+                                  driver->current_sensors->get_current_b(),
+                                  driver->current_sensors->get_current_c()};
+            // curr_struct->current_a = phase_currents[0]; curr_struct->current_b = phase_currents[1]; curr_struct->current_c = phase_currents[2];
+            String text = "";
+            // text += static_cast<String>(phase_currents.current_a); text += "/";
+            // text += static_cast<String>(phase_currents.current_b); text += "/";
+            // text += static_cast<String>(phase_currents.current_c); text += "/";
+            alpha_beta_struct ab_vec = clarke_transform(phase_currents);
+            // text += static_cast<String>(ab_vec.alpha); text += "/";
+            // text += static_cast<String>(ab_vec.beta); text += "/";
+
+            dq_struct dq_vec = park_transform(ab_vec);
+            text += static_cast<String>(dq_vec.d); text += "/";
+            text += static_cast<String>(dq_vec.q); text += "/";
+
+            state_feedback();
+
+            float command_d = foc->d_pid->update(dq_vec.d);
+            float command_q = foc->q_pid->update(dq_vec.q);
+            foc->d_pid->print_state();
+            foc->q_pid->print_state();
+            dq_struct command_dq = {command_d, command_q};
+            // text += static_cast<String>(command_d); text += "/";
+            // text += static_cast<String>(command_q); text += "/";
+            alpha_beta_struct command_alpha_beta = reverse_park_transform(command_dq);
+            text += static_cast<String>(command_alpha_beta.alpha); text += "/";
+            text += static_cast<String>(command_alpha_beta.beta); text += "/";
+            PhaseCurrents command_currents = reverse_clarke_transform(command_alpha_beta);
+            text += static_cast<String>(command_currents.current_a); text += "/";
+            text += static_cast<String>(command_currents.current_b); text += "/";
+            text += static_cast<String>(command_currents.current_c); text += "/";
+            Serial.println(text);
+            actuate_currents(command_currents);
+            delay(1);
+        }
+
+        all_off();
+    }
+
+
+
+    alpha_beta_struct Maxwell::clarke_transform(PhaseCurrents currents) { // currents to alpha-beta
+        float I_alpha = 1.5 * currents.current_a;
+        float I_beta = sqrt(3.0)/2 * (currents.current_b - currents.current_c);
+        alpha_beta_struct ab = {I_alpha, I_beta};
+        curr_struct->alpha_beta = ab;
+        return ab;
+    }
+
+    dq_struct Maxwell::park_transform(alpha_beta_struct ab_vec) { // alpha-beta to dq
+        // the park transform
+
+        float theta = encoder->get_angle(); // Assuming we're aligned with the encoder!
+        float electrical_theta = theta * POLE_PAIRS_6374;
+        float d = ab_vec.alpha * cos(electrical_theta)  + ab_vec.beta * sin(electrical_theta);
+        float q = -ab_vec.alpha * sin(electrical_theta) + ab_vec.beta * cos(electrical_theta);
+        dq_struct dq = {d, q};
+        curr_struct->dq = dq;
+        return dq;
+    }
+
+    alpha_beta_struct Maxwell::reverse_park_transform(dq_struct dq_vec) {  // dq to alpha-beta
+        float theta = encoder->get_angle(); // Assuming we're aligned with the encoder!
+        float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
+        float alpha = dq_vec.d * cos(electrical_theta) - dq_vec.q * sin(electrical_theta);
+        float beta  = dq_vec.d * sin(electrical_theta) + dq_vec.q * cos(electrical_theta);
+        alpha_beta_struct alpha_beta = {alpha, beta};
+        curr_struct->alpha_beta = alpha_beta;
+        return alpha_beta;
+    }
+
+    PhaseCurrents Maxwell::reverse_clarke_transform(alpha_beta_struct ab_vec) {
+
+        // PhaseCurrents currents = {(2/3)*ab_vec.alpha,
+        //                     (-1/3)*ab_vec.alpha + (sqrt(3)/3)*ab_vec.beta,
+        //                     (-1/3)*ab_vec.alpha - (sqrt(3)/3)*ab_vec.beta};
+        PhaseCurrents currents;
+        currents.current_a = 0.3333*ab_vec.alpha;
+        currents.current_b = (-1/3)*ab_vec.alpha + (sqrt(3)/3)*ab_vec.beta;
+        currents.current_c = (-1/3)*ab_vec.alpha - (sqrt(3)/3)*ab_vec.beta;
+        curr_struct->phase_currents = currents;
+        return currents;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     void Maxwell::drive_hall_velocity() { // velocity is in electrical rads/s, duration is in ms
