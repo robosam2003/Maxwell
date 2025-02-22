@@ -8,7 +8,7 @@
 // #include "AS5047P.h"
 #include "current_sensors.h"
 // #include "Maxwell.cpp"
-
+// #define PWM_FREQUENCY 2000
 
 Maxwell::Maxwell maxwell;
 // Maxwell::HallSensor hall_sensor(HALL_A_PIN, HALL_B_PIN, HALL_C_PIN);
@@ -42,6 +42,7 @@ void setup() {
     //     1,
     //     NULL
     // );
+    analogWriteFrequency(16000);
 
     Serial.begin(921600);
     analogReadResolution(12);

@@ -73,16 +73,6 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="3" rowspan="2">
-         <widget class="PlotWidget" name="rotorWidget" native="true">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-         </widget>
-        </item>
         <item row="0" column="0" colspan="4">
          <widget class="QFrame" name="titleFrame">
           <property name="maximumSize">
@@ -181,6 +171,26 @@
             </layout>
            </item>
           </layout>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="PlotWidget" name="dq_currents_plot" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="2">
+         <widget class="PlotWidget" name="rotor_angle_plot" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
          </widget>
         </item>
        </layout>

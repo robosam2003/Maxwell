@@ -33,12 +33,12 @@ namespace Maxwell {
             30);
 
         foc = new FOC{
-            new PIDController(1, 0.1, 0,
+            new PIDController(0.1, 2, 0,
             0.0,
             5.0,
             2.0),
 
-            new PIDController(1, 0.1, 0,
+            new PIDController(0.1, 2, 0,
             0.0,
             5.0,
             2.0)};
@@ -58,6 +58,10 @@ namespace Maxwell {
         pinMode(DRV8323_LO_A_PIN, OUTPUT);
         pinMode(DRV8323_LO_B_PIN, OUTPUT);
         pinMode(DRV8323_LO_C_PIN, OUTPUT);
+
+
+
+
         pinMode(DRV8323_GATE_EN_PIN, OUTPUT);
         pinMode(DRV8323_DRIVE_CAL_PIN, OUTPUT);
 
@@ -86,17 +90,26 @@ namespace Maxwell {
     void Maxwell::state_feedback() {
         String text = "";
         // text += static_cast<String>(hall_sensor->hall_code); text += "/";
-        text += static_cast<String>(encoder->get_angle()); text += "/";
+        text += static_cast<String>(fmod(encoder->get_angle() * POLE_PAIRS_6374, 2*PI)); text += "/";
         // text += static_cast<String>(hall_sensor->electrical_velocity);
-        text += "/";
+        // text += "/";
         // driver->current_sensors->read();
+        text += static_cast<String>(curr_struct->phase_currents.current_a); text += "/";
+        text += static_cast<String>(curr_struct->phase_currents.current_b); text += "/";
+        text += static_cast<String>(curr_struct->phase_currents.current_c); text += "/";
         text += static_cast<String>(curr_struct->dq.d); text += "/";
         text += static_cast<String>(curr_struct->dq.q); text += "/";
         text += static_cast<String>(curr_struct->alpha_beta.alpha); text += "/";
         text += static_cast<String>(curr_struct->alpha_beta.beta); text += "/";
         text += static_cast<String>(pwm_input->read_percentage()); text += "/";
-        text += static_cast<String>(0.0); text += "/";
-        // text += static_cast<String>(pid_controller->_output); text += "/";
+        double voltages[4] = {analogRead(V_SENSE_A_PIN) * SENSE_CONVERSION_FACTOR,
+                             analogRead(V_SENSE_B_PIN) * SENSE_CONVERSION_FACTOR,
+                             analogRead(V_SENSE_C_PIN) * SENSE_CONVERSION_FACTOR,
+                                analogRead(V_SUPPLY_SENSE_PIN) * SENSE_CONVERSION_FACTOR};
+        text += static_cast<String>(voltages[0]); text += "/";
+        text += static_cast<String>(voltages[1]); text += "/";
+        text += static_cast<String>(voltages[2]); text += "/";
+        text += static_cast<String>(voltages[3]); text += "/";
 
         text += static_cast<String>(driver->get_fault_status_1_string()); text += "/";
         text += static_cast<String>(driver->get_fault_status_2_string()); text += "/";
@@ -120,7 +133,7 @@ namespace Maxwell {
         double max_current = 4.0; // 4A
         double phase_resistance = 0.7; // 0.7 ohms
         // int max_level = max_current * phase_resistance / input_voltage * 255;
-        int max_level = 10;
+        int max_level = 20;
 
         int level_a = static_cast<int>(abs(current_a) * phase_resistance / input_voltage * 255);
         int level_b = static_cast<int>(abs(current_b) * phase_resistance / input_voltage * 255);
@@ -174,7 +187,7 @@ namespace Maxwell {
         uint32_t start = millis();
         uint32_t duration = 10000;
         // for (; millis() - start < duration;) {
-        foc->d_pid->set_setpoint(1);
+        foc->d_pid->set_setpoint(3);
         foc->q_pid->set_setpoint(0);
         while (true) {
             // holding position mode: d vector is 1, q vector is 0
@@ -187,36 +200,43 @@ namespace Maxwell {
                                   driver->current_sensors->get_current_c()};
             // curr_struct->current_a = phase_currents[0]; curr_struct->current_b = phase_currents[1]; curr_struct->current_c = phase_currents[2];
             String text = "";
-            // text += static_cast<String>(phase_currents.current_a); text += "/";
-            // text += static_cast<String>(phase_currents.current_b); text += "/";
-            // text += static_cast<String>(phase_currents.current_c); text += "/";
-            alpha_beta_struct ab_vec = clarke_transform(phase_currents);
-            // text += static_cast<String>(ab_vec.alpha); text += "/";
-            // text += static_cast<String>(ab_vec.beta); text += "/";
+            text += static_cast<String>(phase_currents.current_a); text += "/";
+            text += static_cast<String>(phase_currents.current_b); text += "/";
+            text += static_cast<String>(phase_currents.current_c); text += "/";
+            text += "    ";
 
+            alpha_beta_struct ab_vec = clarke_transform(phase_currents);
+            text += static_cast<String>(ab_vec.alpha); text += "/";
+            text += static_cast<String>(ab_vec.beta); text += "/";
+            text += "    ";
             dq_struct dq_vec = park_transform(ab_vec);
             text += static_cast<String>(dq_vec.d); text += "/";
             text += static_cast<String>(dq_vec.q); text += "/";
 
-            state_feedback();
 
             float command_d = foc->d_pid->update(dq_vec.d);
             float command_q = foc->q_pid->update(dq_vec.q);
-            foc->d_pid->print_state();
-            foc->q_pid->print_state();
+            // foc->d_pid->print_state();
+            // foc->q_pid->print_state();
             dq_struct command_dq = {command_d, command_q};
-            // text += static_cast<String>(command_d); text += "/";
-            // text += static_cast<String>(command_q); text += "/";
+            text += static_cast<String>(command_d); text += "/";
+            text += static_cast<String>(command_q); text += "/";
+            text += "    ";
+
             alpha_beta_struct command_alpha_beta = reverse_park_transform(command_dq);
             text += static_cast<String>(command_alpha_beta.alpha); text += "/";
             text += static_cast<String>(command_alpha_beta.beta); text += "/";
+            text += "    ";
+
             PhaseCurrents command_currents = reverse_clarke_transform(command_alpha_beta);
             text += static_cast<String>(command_currents.current_a); text += "/";
             text += static_cast<String>(command_currents.current_b); text += "/";
             text += static_cast<String>(command_currents.current_c); text += "/";
             Serial.println(text);
+            // state_feedback();
+
             actuate_currents(command_currents);
-            delay(1);
+            // delay(1);
         }
 
         all_off();
@@ -236,7 +256,7 @@ namespace Maxwell {
         // the park transform
 
         float theta = encoder->get_angle(); // Assuming we're aligned with the encoder!
-        float electrical_theta = theta * POLE_PAIRS_6374;
+        float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
         float d = ab_vec.alpha * cos(electrical_theta)  + ab_vec.beta * sin(electrical_theta);
         float q = -ab_vec.alpha * sin(electrical_theta) + ab_vec.beta * cos(electrical_theta);
         dq_struct dq = {d, q};
