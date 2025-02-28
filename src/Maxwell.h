@@ -25,6 +25,7 @@ namespace Maxwell {
     struct FOC {
         PIDController* d_pid;
         PIDController* q_pid;
+        PIDController* position_pid;
     };
 
     struct alpha_beta_struct {

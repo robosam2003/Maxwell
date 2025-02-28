@@ -41,7 +41,13 @@ namespace Maxwell {
             new PIDController(0.1, 2, 0,
             0.0,
             5.0,
-            2.0)};
+            2.0),
+
+            new PIDController(0.1, 2, 0,
+            0.0,
+            5.0,
+            2.0)
+        };
         curr_struct = new Currents{0, 0, 0, 0, 0, 0, 0};
     }
 
@@ -93,10 +99,10 @@ namespace Maxwell {
         text += static_cast<String>(fmod(encoder->get_angle() * POLE_PAIRS_6374, 2*PI)); text += "/";
         // text += static_cast<String>(hall_sensor->electrical_velocity);
         // text += "/";
-        // driver->current_sensors->read();
-        text += static_cast<String>(curr_struct->phase_currents.current_a); text += "/";
-        text += static_cast<String>(curr_struct->phase_currents.current_b); text += "/";
-        text += static_cast<String>(curr_struct->phase_currents.current_c); text += "/";
+        driver->current_sensors->read();
+        text += static_cast<String>(driver->current_sensors->get_current_a()); text += "/";
+        text += static_cast<String>(driver->current_sensors->get_current_b()); text += "/";
+        text += static_cast<String>(driver->current_sensors->get_current_c()); text += "/";
         text += static_cast<String>(curr_struct->dq.d); text += "/";
         text += static_cast<String>(curr_struct->dq.q); text += "/";
         text += static_cast<String>(curr_struct->alpha_beta.alpha); text += "/";
@@ -133,7 +139,7 @@ namespace Maxwell {
         double max_current = 4.0; // 4A
         double phase_resistance = 0.7; // 0.7 ohms
         // int max_level = max_current * phase_resistance / input_voltage * 255;
-        int max_level = 20;
+        int max_level = 15;
 
         int level_a = static_cast<int>(abs(current_a) * phase_resistance / input_voltage * 255);
         int level_b = static_cast<int>(abs(current_b) * phase_resistance / input_voltage * 255);
@@ -184,13 +190,16 @@ namespace Maxwell {
 
         all_off();
 
-        uint32_t start = millis();
-        uint32_t duration = 10000;
-        // for (; millis() - start < duration;) {
-        foc->d_pid->set_setpoint(3);
+
+        foc->position_pid->set_setpoint(180);
+        foc->d_pid->set_setpoint(1);
         foc->q_pid->set_setpoint(0);
         while (true) {
-            // holding position mode: d vector is 1, q vector is 0
+            // float theta = encoder->get_angle();
+            // float q_set_point = foc->position_pid->update(theta);
+            // // foc->position_pid->print_state();
+            // foc->q_pid->set_setpoint(q_set_point);
+            // foc->q_pid->print_state();
 
 
             // Get motor currents
@@ -198,7 +207,7 @@ namespace Maxwell {
             PhaseCurrents phase_currents = {driver->current_sensors->get_current_a(),
                                   driver->current_sensors->get_current_b(),
                                   driver->current_sensors->get_current_c()};
-            // curr_struct->current_a = phase_currents[0]; curr_struct->current_b = phase_currents[1]; curr_struct->current_c = phase_currents[2];
+
             String text = "";
             text += static_cast<String>(phase_currents.current_a); text += "/";
             text += static_cast<String>(phase_currents.current_b); text += "/";
@@ -232,8 +241,8 @@ namespace Maxwell {
             text += static_cast<String>(command_currents.current_a); text += "/";
             text += static_cast<String>(command_currents.current_b); text += "/";
             text += static_cast<String>(command_currents.current_c); text += "/";
-            Serial.println(text);
-            // state_feedback();
+            // Serial.println(text);
+            state_feedback();
 
             actuate_currents(command_currents);
             // delay(1);
@@ -245,8 +254,8 @@ namespace Maxwell {
 
 
     alpha_beta_struct Maxwell::clarke_transform(PhaseCurrents currents) { // currents to alpha-beta
-        float I_alpha = 1.5 * currents.current_a;
-        float I_beta = sqrt(3.0)/2 * (currents.current_b - currents.current_c);
+        float I_alpha = currents.current_a;
+        float I_beta = (currents.current_b - currents.current_c) / sqrt(3);
         alpha_beta_struct ab = {I_alpha, I_beta};
         curr_struct->alpha_beta = ab;
         return ab;

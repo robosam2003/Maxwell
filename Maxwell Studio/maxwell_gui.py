@@ -60,7 +60,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         self.sample_no = 0
 
 
-        BUFFER_SIZE = 500
+        BUFFER_SIZE = 1000
         self.sample_circular_buffer = deque(maxlen=BUFFER_SIZE)
         self.current_a_circular_buffer = deque(maxlen=BUFFER_SIZE)
         self.current_b_circular_buffer = deque(maxlen=BUFFER_SIZE)

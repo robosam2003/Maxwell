@@ -7,6 +7,7 @@
 #include "PWMInput.h"
 // #include "AS5047P.h"
 #include "current_sensors.h"
+#include <stm32f4xx.h>
 // #include "Maxwell.cpp"
 // #define PWM_FREQUENCY 2000
 
@@ -34,18 +35,20 @@ PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
 
 void setup() {
-    // xTaskCreate(
-    //     drive_motor,
-    //     "drive motor",
-    //     1000,
-    //     NULL,
-    //     1,
-    //     NULL
-    // );
     analogWriteFrequency(16000);
+    analogReadResolution(12);
+
+    // Set the pwm mode to centre aligned
+    TIM1->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
+    TIM2->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
+    TIM3->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
+    TIM4->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
+    TIM5->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
+    TIM6->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
+    TIM8->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
+
 
     Serial.begin(921600);
-    analogReadResolution(12);
 
     maxwell.setup();
     maxwell.driver->enable(true);
@@ -110,7 +113,8 @@ void fake_state_feedback() {
 }
 
 void loop() {
-    maxwell.foc_position_control();
+    maxwell.state_feedback();
+    // maxwell.foc_position_control();
     // delay(5000);
 
     // fake_state_feedback();
