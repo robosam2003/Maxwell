@@ -9,7 +9,6 @@
 // #include "current_sensors.h"
 #include <stm32f4xx.h>
 
-#define STM32F405xx
 // Maxwell::Maxwell maxwell;
 // // Maxwell::HallSensor hall_sensor(HALL_A_PIN, HALL_B_PIN, HALL_C_PIN);
 // PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
@@ -173,6 +172,7 @@ void init_pwm() {
     HAL_TIM_Base_Init(TIM_A->getHandle());
     HAL_TIM_Base_Init(TIM_B->getHandle());
     HAL_TIM_Base_Init(TIM_C->getHandle());
+
 }
 
 void sync_pwm() {
@@ -202,138 +202,27 @@ void set_pwm(uint32_t Ua, uint32_t Ub, uint32_t Uc) {
     TIM_A->setCaptureCompare(channel_a, Ua, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
     TIM_B->setCaptureCompare(channel_b, Ub, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
     TIM_C->setCaptureCompare(channel_c, Uc, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
-    // TIM_A-> setPWM(channel_a, pin_a, pwm_freq, Ua);
-    // TIM_B-> setPWM(channel_b, pin_b, pwm_freq, Ub);
-    // TIM_C-> setPWM(channel_c, pin_c, pwm_freq, Uc);
+
 }
 
 
 void setup() {
-    // analogWriteFrequency(16000);
-    // analogWriteResolution(8);
-    // analogReadResolution(12);
-    //
-    // // Set the pwm mode to centre aligned
-    // TIM1->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
-    //
-    // TIM2->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
-    // TIM3->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
-    // TIM4->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
-    // TIM5->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
-    // TIM6->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
-    // TIM8->CR1 |= TIM_CR1_CMS_1; // Center-aligned mode 1
-    //
-    //
-    // Serial.begin(921600);
-    //
-    // maxwell.setup();
-    // maxwell.driver->enable(true);
-    // // hall_sensor.setup(true, hall_a_callback, hall_b_callback, hall_c_callback);
-    // // pwm_input.set_callback(pwm_callback);
-    // // maxwell.hall_sensor = &hall_sensor;
-    // maxwell.pwm_input = &pwm_input;
-    // // Maxwell::all_off();
-    // maxwell.driver->enable(true);
-    // maxwell.driver->perform_current_sense_calibration();
-    // maxwell.driver->current_sensors->calibrate_offsets();
-    // // maxwell.driver->enable(false);
-    //
-    //
-    // // digitalWrite(DRV8323_LO_A_PIN, HIGH);
-    // // digitalWrite(DRV8323_LO_B_PIN, HIGH);
-    // // digitalWrite(DRV8323_LO_C_PIN, HIGH);
-    // // maxwell.driver->perform_current_sense_calibration();
     Serial.begin(115200);
     delay(1000);
-    // Serial.print("Starting\n");
-    // Serial.print("Channels: "); Serial.println(channel_a);
-    // Serial.print("Channels: "); Serial.println(channel_b);
-    // Serial.print("Channels: "); Serial.println(channel_c);
-
 
     init_pwm();
     sync_pwm();
 }
 
 
-//
-// void fake_state_feedback() {
-//     String text = "";
-//     double angle = fmod(maxwell.encoder->get_angle() * POLE_PAIRS_6374, 2*PI);
-//     text += static_cast<String>(angle);
-//     text += "//";
-//     maxwell.driver->current_sensors->read();
-//     // Perform the clarke transform on the currents
-//     double currents[3] = {maxwell.driver->current_sensors->get_current_a(),
-//                           maxwell.driver->current_sensors->get_current_b(),
-//                           maxwell.driver->current_sensors->get_current_c()};
-//     double c_current = -1 * (currents[0] + currents[1]); // Kirchoff's current law
-//     double I_alpha = 1.5 * currents[0];
-//     double I_beta = sqrt(3.0)/2 * (currents[1] - currents[2]);
-//     double magnitude = sqrt(I_alpha*I_alpha + I_beta*I_beta);
-//
-//     text += static_cast<String>(I_alpha); text += "/";
-//     text += static_cast<String>(I_beta); text += "/";
-//     text += static_cast<String>(magnitude); text += "/";
-//     text += static_cast<String>(0.0); text += "/";
-//
-//     // text += static_cast<String>(maxwell.driver->current_sensors->get_current_a()); text += "/";
-//     // text += static_cast<String>(maxwell.driver->current_sensors->get_current_b()); text += "/";
-//     // text += static_cast<String>(maxwell.driver->current_sensors->get_current_c()); text += "/";
-//     // text += static_cast<String>(0.0); text += "/";
-//     // text += static_cast<String>(analogRead(DRV8323_CURR_SENSE_A_PIN)); text += "/";
-//     // text += static_cast<String>(analogRead(DRV8323_CURR_SENSE_B_PIN)); text += "/";
-//     // text += static_cast<String>(analogRead(DRV8323_CURR_SENSE_C_PIN)); text += "/";
-//     // text += static_cast<String>(0.0); text += "/";
-//     text += "////";
-//
-//     int checksum = 0;
-//     for (int i = 0; i < text.length(); i++) {
-//         checksum += text[i]; // add the ASCII value of each character
-//     }
-//     checksum = checksum % 256;
-//     text += static_cast<String>(checksum);
-//     Serial.println(text);
-//     delay(10);
-// }
-
 void loop() {
-    // maxwell.state_feedback();
-    // maxwell.foc_position_control();
-    // delay(5000);
 
-    // fake_state_feedback();
-    // float sin_freq = 0.1; // rad/s
-    // float sin_amp = 1.0;
-    // float angle = sin_freq * millis() / 1000.0 * 2 * PI;
-    // float Ua = sin(angle) * sin_amp + sin_amp/2;
-    // float Ub = sin(angle + 2 * PI / 3) * sin_amp + sin_amp/2;
-    // float Uc = sin(angle - 2 * PI / 3) * sin_amp + sin_amp/2;
-    // set_pwm(static_cast<uint32_t> (Ua * 100),
-    //         static_cast<uint32_t> (Ub * 100),
-    //         static_cast<uint32_t> (Uc * 100));
 
     set_pwm(50, 128, 240);
     // set_pwm(10, 50, 95);
     print_state();
     delay(10);
 
-
-    // Serial.print(pwm_state.PIN_A+1); Serial.print(" ");
-    // Serial.print(pwm_state.PIN_B+2); Serial.print(" ");
-    // Serial.print(pwm_state.PIN_C+3); Serial.print("\n");
-
-    // Serial.print(Ua); Serial.print(" ");
-    // Serial.print(Ub); Serial.print(" ");
-    // Serial.println(Uc);
-    // delay(1);
-
-
-
-
-    // get the timer state
-    // uint c = MyTim->getCount();
-    // Serial.println(c);
 
 
 }

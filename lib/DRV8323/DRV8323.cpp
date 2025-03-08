@@ -19,10 +19,30 @@ namespace DRV8323 {
 
 
     // Constructor
-    DRV8323::DRV8323(byte CS, SPIClass &spi, uint32_t spiFreq, byte gate_enable_pin) {
+    DRV8323::DRV8323(byte CS, SPIClass &spi, uint32_t spiFreq, uint8_t pin_a, uint8_t pin_b, uint8_t pin_c, byte gate_enable_pin) {
         _CS = CS;
         _spi = spi;
+
+        pwm_3_x.PIN_A = pin_a;
+        pwm_3_x.PIN_B = pin_b;
+        pwm_3_x.PIN_C = pin_c;
+
+        pinMode(pwm_3_x.PIN_A, OUTPUT);
+        pinMode(pwm_3_x.PIN_B, OUTPUT);
+        pinMode(pwm_3_x.PIN_C, OUTPUT);
+
+        // TODO: Deal with this properly - this is a quick hack
+        pinMode(DRV8323_LO_A_PIN, OUTPUT);
+        pinMode(DRV8323_LO_B_PIN, OUTPUT);
+        pinMode(DRV8323_LO_C_PIN, OUTPUT);
+        // Tie all low side pins HIGH to avoid hi-z state
+        digitalWrite(DRV8323_LO_A_PIN, HIGH);
+        digitalWrite(DRV8323_LO_B_PIN, HIGH);
+        digitalWrite(DRV8323_LO_C_PIN, HIGH);
+
         gate_en_pin = gate_enable_pin;
+
+
 
 
         // Set up SPI settings - SPI MODE 1 because data is captured on the falling edge of the clock
@@ -51,6 +71,24 @@ namespace DRV8323 {
         }
         delay(1);  // Wake-up time for DRV8323 is maximum 1ms
     }
+
+    void DRV8323::setup_pwm() {
+        // pin_a = PB15 = TIM1_CH3
+        // pin_b = PA3  = TIM5_CH4
+        // pin_c = PA1  = TIM2_CH2
+
+
+        HardwareTimer *pin_a_timer = new HardwareTimer(TIM1);
+        HardwareTimer *pin_b_timer = new HardwareTimer(TIM5);
+        HardwareTimer *pin_c_timer = new HardwareTimer(TIM2);
+
+        // Set the channels on each
+        pin_a_timer->setMode(3, TIMER_OUTPUT_COMPARE_PWM1, pwm_3_x.PIN_A);
+
+
+
+    }
+
 
     uint16_t DRV8323::read_reg(REGISTER regAddress) {
         // NOTE: DRV8323 must be ENABLED to run SPI commands
@@ -186,6 +224,37 @@ namespace DRV8323 {
         current_sensors->set_csa_gain(gain);
     }
 
+    void DRV8323::set_gate_drive_source_current(IDRIVE_P_CURRENT current) {
+        uint16_t data_1_hs = read_reg(REGISTER::GATE_DRIVE_HS);
+        data_1_hs = data_1_hs & 0b11100001111; // Mask the IDRIVEP_HS bits
+        data_1_hs = data_1_hs | (current << 4);   // Set the IDRIVEP_HS bits
+        write_reg(REGISTER::GATE_DRIVE_HS, data_1_hs);
+        delay(1);
+        uint16_t data_2_ls = read_reg(REGISTER::GATE_DRIVE_LS);
+        data_2_ls = data_2_ls & 0b11100001111; // Mask the IDRIVEP_LS bits
+        data_2_ls = data_2_ls | (current << 4);   // Set the IDRIVEP_LS bits
+        write_reg(REGISTER::GATE_DRIVE_LS, data_2_ls);
+    }
+
+    void DRV8323::set_gate_drive_sink_current(IDRIVE_N_CURRENT current) {
+        uint16_t data_1_hs = read_reg(REGISTER::GATE_DRIVE_HS);
+        data_1_hs = data_1_hs & 0b11111110000; // Mask the IDRIVEN_HS bits
+        data_1_hs = data_1_hs | current;   // Set the IDRIVEN_HS bits
+        write_reg(REGISTER::GATE_DRIVE_HS, data_1_hs);
+        delay(1);
+        uint16_t data_2_ls = read_reg(REGISTER::GATE_DRIVE_LS);
+        data_2_ls = data_2_ls & 0b11111110000; // Mask the IDRIVEN_LS bits
+        data_2_ls = data_2_ls | current;   // Set the IDRIVEN_LS bits
+        write_reg(REGISTER::GATE_DRIVE_LS, data_2_ls);
+    }
+
+    void DRV8323::set_peak_gate_drive_time(TDRIVE_TIME time) {
+        uint16_t data = read_reg(REGISTER::GATE_DRIVE_LS);
+        data = data & 0b10011111111; // Mask the TDRIVE bits
+        data = data | (time << 8);   // Set the TDRIVE bits
+        write_reg(REGISTER::GATE_DRIVE_LS, data);
+    }
+
     void DRV8323::perform_current_sense_calibration() {
         uint16_t data = read_reg(REGISTER::CSA_CONTROL);
         setBit(&data, 4, 1);  // Channel A
@@ -203,10 +272,11 @@ namespace DRV8323 {
 
     void DRV8323::default_configuration() {
         enable(true);
-        set_pwm_mode(PWM_MODE::PWM_6x);
+        set_pwm_mode(PWM_MODE::PWM_3x);
         enable_CPUV_Fault(false);
         enable_GDF(false);
         set_current_gain(CSA_GAIN::GAIN_40_V_V);
+        clear_fault();
     }
 
     void DRV8323::enable_CPUV_Fault(bool enable) {

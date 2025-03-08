@@ -19,8 +19,10 @@ namespace Maxwell {
             DRV8323_CS_PIN,
             SPI_1,
             1000000,
+            DRV8323_HI_A_PIN,
+            DRV8323_HI_B_PIN,
+            DRV8323_HI_C_PIN,
             DRV8323_GATE_EN_PIN);
-        driver->default_configuration();
         encoder = new AS5047P::AS5047P(
             AS5047P_CS_PIN,
             SPI_2,
@@ -43,7 +45,7 @@ namespace Maxwell {
             5.0,
             2.0),
 
-            new PIDController(0.1, 2, 0,
+            new PIDController(20, 0.1, 0,
             0.0,
             5.0,
             2.0)
@@ -65,6 +67,19 @@ namespace Maxwell {
         pinMode(DRV8323_LO_B_PIN, OUTPUT);
         pinMode(DRV8323_LO_C_PIN, OUTPUT);
 
+        driver->default_configuration();
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
+        driver->set_gate_drive_source_current(DRV8323::IDRIVE_P_CURRENT::IDRIVEP_140mA);
+        driver->set_gate_drive_sink_current(DRV8323::IDRIVEN_160mA);
+        driver->set_peak_gate_drive_time(DRV8323::TDRIVE_TIME::TDRIVE_500ns);
+        driver->enable(true);
+
+        // Tie the low side pins HIGH to avoid hi-z state
+        digitalWrite(DRV8323_LO_A_PIN, HIGH);
+        digitalWrite(DRV8323_LO_B_PIN, HIGH);
+        digitalWrite(DRV8323_LO_C_PIN, HIGH);
+
+
 
 
 
@@ -80,7 +95,6 @@ namespace Maxwell {
         pinMode(DRV8323_CURR_SENSE_B_PIN, INPUT);
         pinMode(DRV8323_CURR_SENSE_C_PIN, INPUT);
 
-
         digitalWrite(DRV8323_DRIVE_CAL_PIN, LOW);
     }
 
@@ -88,9 +102,9 @@ namespace Maxwell {
         digitalWrite(DRV8323_HI_A_PIN, LOW);
         digitalWrite(DRV8323_HI_B_PIN, LOW);
         digitalWrite(DRV8323_HI_C_PIN, LOW);
-        digitalWrite(DRV8323_LO_A_PIN, LOW);
-        digitalWrite(DRV8323_LO_B_PIN, LOW);
-        digitalWrite(DRV8323_LO_C_PIN, LOW);
+        // digitalWrite(DRV8323_LO_A_PIN, LOW);
+        // digitalWrite(DRV8323_LO_B_PIN, LOW);
+        // digitalWrite(DRV8323_LO_C_PIN, LOW);
     }
 
     void Maxwell::state_feedback() {
@@ -130,24 +144,51 @@ namespace Maxwell {
         Serial.println(text);
     }
 
-    void actuate_currents(PhaseCurrents command_currents) {
+    void actuate_currents(PhaseCurrents command_currents, String &text) {
+        // TODO: Implement a timer-based phase-offset PWM with timers
+
+
+
         double current_a = command_currents.current_a;
         double current_b = command_currents.current_b;
         double current_c = command_currents.current_c;
 
         double input_voltage = 12.0; // 12V
-        double max_current = 4.0; // 4A
-        double phase_resistance = 0.7; // 0.7 ohms
-        // int max_level = max_current * phase_resistance / input_voltage * 255;
-        int max_level = 15;
+        double voltage_limit = 3; // V
+        voltage_limit = constrain(voltage_limit, 0, input_voltage);
+        float centre = voltage_limit / 2;
+        double current_limit = 4.0; // 4A
+        double phase_resistance = 0.15; //
+        int max_level = (int)voltage_limit / input_voltage * 255;
+        // int max_level = 15;
 
-        int level_a = static_cast<int>(abs(current_a) * phase_resistance / input_voltage * 255);
-        int level_b = static_cast<int>(abs(current_b) * phase_resistance / input_voltage * 255);
-        int level_c = static_cast<int>(abs(current_c) * phase_resistance / input_voltage * 255);
-        level_a = constrain(level_a, -max_level, max_level);
-        level_b = constrain(level_b, -max_level, max_level);
-        level_c = constrain(level_c, -max_level, max_level);
+        float voltage_a = (current_a * phase_resistance);
+        float voltage_b = (current_b * phase_resistance);
+        float voltage_c = (current_c * phase_resistance);
 
+        text += "      ";
+        text += static_cast<String>(voltage_a); text += "/";
+        text += static_cast<String>(voltage_b); text += "/";
+        text += static_cast<String>(voltage_c); text += "/";
+
+        int level_a = constrain(level_a, 0, max_level);  // Cannot actuate a negative current
+        int level_b = constrain(level_b, 0, max_level);
+        int level_c = constrain(level_c, 0, max_level);
+
+
+        // running in 3x PWM mode
+        analogWrite(DRV8323_HI_A_PIN, level_a);
+        analogWrite(DRV8323_HI_B_PIN, level_b);
+        analogWrite(DRV8323_HI_C_PIN, level_c);
+        text += "      ";
+        text += static_cast<String>(level_a); text += "/";
+        text += static_cast<String>(level_b); text += "/";
+        text += static_cast<String>(level_c); text += "/";
+
+
+
+
+        /*
         if (current_a > 0) {
             analogWrite(DRV8323_HI_A_PIN, level_a);
             digitalWrite(DRV8323_LO_A_PIN, LOW);
@@ -171,12 +212,12 @@ namespace Maxwell {
         else {
             analogWrite(DRV8323_HI_C_PIN, LOW);
             digitalWrite(DRV8323_LO_C_PIN, level_c);
-        }
+        } */
     }
 
     void Maxwell::foc_position_control() {
         // Running in 6x PWM mode
-        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
+        // driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
 
         // Enable the driver
         driver->enable(true);
@@ -184,22 +225,22 @@ namespace Maxwell {
         int dir = MOTOR_DIRECTION::CW;
         // // ALIGN
         analogWrite(DRV8323_HI_A_PIN, 50);
-        digitalWrite(DRV8323_LO_B_PIN, HIGH);
-        digitalWrite(DRV8323_LO_C_PIN, HIGH);
+        digitalWrite(DRV8323_HI_B_PIN, 0);
+        digitalWrite(DRV8323_HI_C_PIN, 0);
         delay(100);
 
         all_off();
 
 
         foc->position_pid->set_setpoint(180);
-        foc->d_pid->set_setpoint(1);
-        foc->q_pid->set_setpoint(0);
+        foc->d_pid->set_setpoint(0);
+        foc->q_pid->set_setpoint(1);
         while (true) {
-            // float theta = encoder->get_angle();
+            float theta = encoder->get_angle();
             // float q_set_point = foc->position_pid->update(theta);
             // // foc->position_pid->print_state();
             // foc->q_pid->set_setpoint(q_set_point);
-            // foc->q_pid->print_state();
+            foc->q_pid->print_state();
 
 
             // Get motor currents
@@ -241,10 +282,11 @@ namespace Maxwell {
             text += static_cast<String>(command_currents.current_a); text += "/";
             text += static_cast<String>(command_currents.current_b); text += "/";
             text += static_cast<String>(command_currents.current_c); text += "/";
-            // Serial.println(text);
-            state_feedback();
 
-            actuate_currents(command_currents);
+            actuate_currents(command_currents, text);
+            Serial.println(text);
+            // state_feedback();
+
             // delay(1);
         }
 

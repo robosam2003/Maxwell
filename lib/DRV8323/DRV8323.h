@@ -11,8 +11,20 @@
 #include "../../include/pin_definitions.h"
 #include "../../include/config.h"
 #include "current_sensors.h"
+#include "HardwareTimer.h"
+
+
+
 
 namespace DRV8323 {
+
+struct PWM_3x_Struct {
+    uint8_t PIN_A;
+    uint8_t PIN_B;
+    uint8_t PIN_C;
+};
+
+
 
 class DRV8323 {
 public:
@@ -25,14 +37,20 @@ public:
     byte word_length = 16;
     byte gate_en_pin;
 
+    PWM_3x_Struct pwm_3_x = {DRV8323_HI_A_PIN,
+                             DRV8323_HI_B_PIN,
+                             DRV8323_HI_C_PIN};
+
     bool enabled = false;
 
     CSA_GAIN _csa_gain = CSA_GAIN::GAIN_5_V_V;
     CurrentSensors* current_sensors;
     // Constructor
-    DRV8323(byte CS, SPIClass& spi, uint32_t spiFreq, byte gate_enable_pin);
+    DRV8323(byte CS, SPIClass& spi, uint32_t spiFreq, uint8_t pin_a, uint8_t pin_b, uint8_t pin_c, byte gate_enable_pin);
 
     void enable(bool enable);
+
+    void setup_pwm();
 
     // Helper functions
     uint16_t read_reg(REGISTER regAddress);  // SPI read
@@ -50,6 +68,12 @@ public:
     void set_SYNC_rectification(bool enable);
 
     void set_current_gain(CSA_GAIN gain);
+
+    void set_gate_drive_source_current(IDRIVE_P_CURRENT current);
+
+    void set_gate_drive_sink_current(IDRIVE_N_CURRENT current);
+
+    void set_peak_gate_drive_time(TDRIVE_TIME time);
 
     void perform_current_sense_calibration();
 

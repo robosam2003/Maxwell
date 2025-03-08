@@ -12,7 +12,6 @@
 #define CURRENT_SENSORS_H
 
 class CurrentSensors {
-// TODO: ARE THESE EVEN SET UP PROPERLY IN THE DRV8323 LIBRARY?
 private:
   double R_SENSE = 400e-6;
 
