@@ -6,7 +6,7 @@ voltage_limit = 6
 
 t = np.linspace(0, 10, 1000)
 
-scale = 2
+scale = voltage_limit/2
 
 a = scale* np.sin(t)             + voltage_limit/2
 b = scale* np.sin(t + 2*np.pi/3) + voltage_limit/2
@@ -29,7 +29,7 @@ c_a = c - a
 plt.plot(t, a_b)
 plt.plot(t, b_c)
 plt.plot(t, c_a)
-plt.plot(t, current_vector)
+# plt.plot(t, current_vector)
 
 plt.grid(True)
 plt.show()

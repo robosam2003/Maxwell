@@ -23,13 +23,10 @@ namespace DRV8323 {
         _CS = CS;
         _spi = spi;
 
-        pwm_3_x.PIN_A = pin_a;
-        pwm_3_x.PIN_B = pin_b;
-        pwm_3_x.PIN_C = pin_c;
+        pinMode(pin_a, OUTPUT);
+        pinMode(pin_b, OUTPUT);
+        pinMode(pin_c, OUTPUT);
 
-        pinMode(pwm_3_x.PIN_A, OUTPUT);
-        pinMode(pwm_3_x.PIN_B, OUTPUT);
-        pinMode(pwm_3_x.PIN_C, OUTPUT);
 
         // TODO: Deal with this properly - this is a quick hack
         pinMode(DRV8323_LO_A_PIN, OUTPUT);
@@ -41,7 +38,6 @@ namespace DRV8323 {
         digitalWrite(DRV8323_LO_C_PIN, HIGH);
 
         gate_en_pin = gate_enable_pin;
-
 
 
 
@@ -70,23 +66,6 @@ namespace DRV8323 {
             digitalWrite(gate_en_pin, LOW);
         }
         delay(1);  // Wake-up time for DRV8323 is maximum 1ms
-    }
-
-    void DRV8323::setup_pwm() {
-        // pin_a = PB15 = TIM1_CH3
-        // pin_b = PA3  = TIM5_CH4
-        // pin_c = PA1  = TIM2_CH2
-
-
-        HardwareTimer *pin_a_timer = new HardwareTimer(TIM1);
-        HardwareTimer *pin_b_timer = new HardwareTimer(TIM5);
-        HardwareTimer *pin_c_timer = new HardwareTimer(TIM2);
-
-        // Set the channels on each
-        pin_a_timer->setMode(3, TIMER_OUTPUT_COMPARE_PWM1, pwm_3_x.PIN_A);
-
-
-
     }
 
 

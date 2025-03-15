@@ -101,9 +101,9 @@ enum IDRIVE_N_CURRENT {
 
 enum TDRIVE_TIME {
     TDRIVE_500ns = 0b00,
-    TDRIVE_1000s = 0b01,
-    TDRIVE_2000s = 0b10,
-    TDRIVE_4000s = 0b11,
+    TDRIVE_1000ns = 0b01,
+    TDRIVE_2000ns = 0b10,
+    TDRIVE_4000ns = 0b11,
 };
 
 enum DIRECTION {

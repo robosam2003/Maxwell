@@ -50,6 +50,22 @@ namespace Maxwell {
         dq_struct dq;
     };
 
+    struct pwm_3x_struct {
+        HardwareTimer *TIM_A;
+        HardwareTimer *TIM_B;
+        HardwareTimer *TIM_C;
+        uint8_t channel_a;
+        uint8_t channel_b;
+        uint8_t channel_c;
+        uint32_t FREQ;
+        uint32_t RESOLUTION;
+        uint32_t MAX_COMPARE_VALUE; // 2^RESOLUTION - 1
+
+        uint8_t PIN_A;
+        uint8_t PIN_B;
+        uint8_t PIN_C;
+    };
+
 
     class Maxwell {
     public:
@@ -61,14 +77,37 @@ namespace Maxwell {
         PWMInput* pwm_input;
         FOC* foc;
         Currents* curr_struct;
+        pwm_3x_struct* pwm_3x;
+        float max_voltage = 4;
+
+        static Maxwell* instance;
+
+
+
+        static void Compare_A_callback();
+        static void Compare_B_callback();
+        static void Compare_C_callback();
+
 
         Maxwell(); // Constructor
 
         void setup();
 
+        void init_pwm();
+
+        void sync_pwm();
+
+        void set_pwm(uint32_t Ua, uint32_t Ub, uint32_t Uc, uint32_t resolution);
+
+        void set_phase_voltages(float Va, float Vb, float Vc);
+
+        void all_off();
+
         void state_feedback();
 
         void foc_position_control();
+
+        void svpwm_position_control();
 
         alpha_beta_struct clarke_transform(PhaseCurrents currents);  // Currents to alpha-beta
 

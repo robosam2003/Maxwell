@@ -37,9 +37,9 @@ public:
     byte word_length = 16;
     byte gate_en_pin;
 
-    PWM_3x_Struct pwm_3_x = {DRV8323_HI_A_PIN,
-                             DRV8323_HI_B_PIN,
-                             DRV8323_HI_C_PIN};
+    // PWM_3x_Struct pwm_3_x = {DRV8323_HI_A_PIN,
+    //                          DRV8323_HI_B_PIN,
+    //                          DRV8323_HI_C_PIN};
 
     bool enabled = false;
 
