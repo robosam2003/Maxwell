@@ -89,7 +89,7 @@ namespace Maxwell {
         driver->default_configuration();
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
         driver->set_gate_drive_source_current(DRV8323::IDRIVE_P_CURRENT::IDRIVEP_1000mA);
-        driver->set_gate_drive_sink_current(DRV8323::IDRIVEN_2000mA);
+        driver->set_gate_drive_sink_current(DRV8323::IDRIVE_N_CURRENT::IDRIVEN_2000mA);
         driver->set_peak_gate_drive_time(DRV8323::TDRIVE_TIME::TDRIVE_4000ns);
         driver->enable(true);
 
@@ -123,7 +123,7 @@ namespace Maxwell {
     void Maxwell::init_pwm() {
         pwm_3x->RESOLUTION = 8;
         pwm_3x->MAX_COMPARE_VALUE = static_cast<uint32_t>(pow(2, pwm_3x->RESOLUTION)) - 1;
-        pwm_3x->FREQ = 10000 * 2;
+        pwm_3x->FREQ = 1000 * 2;
 
         uint8_t pin_a = DRV8323_HI_A_PIN;
         uint8_t pin_b = DRV8323_HI_B_PIN;
@@ -134,17 +134,17 @@ namespace Maxwell {
         TIM_TypeDef *Instance_a = TIM3;
         pwm_3x->channel_a = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_a), PinMap_PWM));
         pwm_3x->TIM_A = new HardwareTimer(Instance_a);
-        pwm_3x->TIM_A->attachInterrupt(pwm_3x->channel_a, Compare_A_callback);
+        // pwm_3x->TIM_A->attachInterrupt(pwm_3x->channel_a, Compare_A_callback);
 
         TIM_TypeDef *Instance_b = TIM5;
         pwm_3x->channel_b = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_b), PinMap_PWM));
         pwm_3x->TIM_B = new HardwareTimer(Instance_b);
-        pwm_3x->TIM_B->attachInterrupt(pwm_3x->channel_b, Compare_B_callback);
+        // pwm_3x->TIM_B->attachInterrupt(pwm_3x->channel_b, Compare_B_callback);
 
         TIM_TypeDef *Instance_c = TIM2;
         pwm_3x->channel_c = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
         pwm_3x->TIM_C = new HardwareTimer(Instance_c);
-        pwm_3x->TIM_C->attachInterrupt(pwm_3x->channel_c, Compare_C_callback);
+        // pwm_3x->TIM_C->attachInterrupt(pwm_3x->channel_c, Compare_C_callback);
 
         uint32_t COUNTER_MODE = TIM_COUNTERMODE_CENTERALIGNED3;  // Counter Rise and then fall
         TimerModes_t PWM_MODE = TIMER_OUTPUT_COMPARE_PWM1; // == TIM_OCMODE_PWM1             pin high when counter < channel compare, low otherwise
@@ -216,7 +216,6 @@ namespace Maxwell {
     }
 
     void Maxwell::all_off() {
-
         set_pwm(0, 0, 0, pwm_3x->RESOLUTION);
     }
 
@@ -410,7 +409,7 @@ namespace Maxwell {
         digitalWrite(DRV8323_LO_B_PIN, HIGH);
         digitalWrite(DRV8323_LO_C_PIN, HIGH);
 
-        set_pwm(0, 10, 50, pwm_3x->RESOLUTION);
+        set_pwm(0, 0, 50, pwm_3x->RESOLUTION);
 
 
 
@@ -420,21 +419,18 @@ namespace Maxwell {
         // uint32_t b = pwm_3x->TIM_B->getHandle()->Instance->CCR4;
         // uint32_t c = pwm_3x->TIM_C->getHandle()->Instance->CCR2;
 
-        uint32_t cnt_a = pwm_3x->TIM_A->getHandle()->Instance->CNT;
-
-        // uint8_t out_a = (cnt_a > a) ? 0 : 1;
-        // uint8_t out_b = (cnt_a > b) ? 0 : 1;
-        // uint8_t out_c = (cnt_a > c) ? 0 : 1;
-
-        Serial.print(instance->pwm_3x->PIN_A + 1); Serial.print(" ");
-        Serial.print(instance->pwm_3x->PIN_B + 2); Serial.print(" ");
-        Serial.print(instance->pwm_3x->PIN_C + 3); Serial.print(" ");
-        // Serial.print(out_b); Serial.print(" ");
-        // Serial.print(out_c); Serial.print(" ");
-        Serial.print(static_cast<float>(cnt_a) / 65535); Serial.print(" ");
-
-        Serial.println();
-        delay(10);
+        // uint32_t cnt_a = pwm_3x->TIM_A->getHandle()->Instance->CNT;
+        //
+        //
+        // Serial.print(instance->pwm_3x->PIN_A + 1); Serial.print(" ");
+        // Serial.print(instance->pwm_3x->PIN_B + 2); Serial.print(" ");
+        // Serial.print(instance->pwm_3x->PIN_C + 3); Serial.print(" ");
+        // // Serial.print(out_b); Serial.print(" ");
+        // // Serial.print(out_c); Serial.print(" ");
+        // Serial.print(static_cast<float>(cnt_a) / 65535); Serial.print(" ");
+        //
+        // Serial.println();
+        // delay(10);
     }
 
     alpha_beta_struct Maxwell::clarke_transform(PhaseCurrents currents) { // currents to alpha-beta

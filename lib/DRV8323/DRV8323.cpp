@@ -29,13 +29,13 @@ namespace DRV8323 {
 
 
         // TODO: Deal with this properly - this is a quick hack
-        pinMode(DRV8323_LO_A_PIN, OUTPUT);
-        pinMode(DRV8323_LO_B_PIN, OUTPUT);
-        pinMode(DRV8323_LO_C_PIN, OUTPUT);
-        // Tie all low side pins HIGH to avoid hi-z state
-        digitalWrite(DRV8323_LO_A_PIN, HIGH);
-        digitalWrite(DRV8323_LO_B_PIN, HIGH);
-        digitalWrite(DRV8323_LO_C_PIN, HIGH);
+        // pinMode(DRV8323_LO_A_PIN, OUTPUT);
+        // pinMode(DRV8323_LO_B_PIN, OUTPUT);
+        // pinMode(DRV8323_LO_C_PIN, OUTPUT);
+        // // Tie all low side pins HIGH to avoid hi-z state
+        // digitalWrite(DRV8323_LO_A_PIN, HIGH);
+        // digitalWrite(DRV8323_LO_B_PIN, HIGH);
+        // digitalWrite(DRV8323_LO_C_PIN, HIGH);
 
         gate_en_pin = gate_enable_pin;
 
