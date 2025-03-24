@@ -1,3 +1,5 @@
+
+/*
 #include <Arduino.h>
 #include "pin_definitions.h"
 #include "Maxwell.h"
@@ -67,7 +69,7 @@ TIM_TypeDef *Instance_c = TIM5;//(TIM_TypeDef *)pinmap_peripheral(digitalPinToPi
 uint32_t channel_c = 2; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
 HardwareTimer *TIM_C = new HardwareTimer(Instance_c);
 
-uint32_t pwm_freq = 5 * 2;
+uint32_t pwm_freq = 1000 * 2;
 
 
 struct PWM_STATE {
@@ -276,10 +278,10 @@ void loop() {
 
 
 }
+*/
 
 
 
-/*
 // -----------------------------------------------------------------------------------
 #include <Arduino.h>
 #include "pin_definitions.h"
@@ -316,8 +318,8 @@ void pwm_callback() {
 
 void setup() {
     delay(100);
-    analogWriteResolution(8);
-    analogWriteFrequency(1000);
+    // analogWriteResolution(8);
+    // analogWriteFrequency(1000);
     Serial.begin(921600);
 
     maxwell.setup();
@@ -327,7 +329,7 @@ void setup() {
     // maxwell.hall_sensor = &hall_sensor;
     pwm_input.set_callback(pwm_callback);
     maxwell.pwm_input = &pwm_input;
-    // maxwell.driver->perform_current_sense_calibration();
+    maxwell.driver->perform_current_sense_calibration();
     // maxwell.driver->current_sensors->calibrate_offsets();
 }
 
@@ -345,6 +347,7 @@ void loop() {
     // Serial.println(`
 
     maxwell.svpwm_position_control();
-    Serial.println(pwm_input.read_percentage());
+    // Serial.println(maxwell.driver->get_fault_status_1_string());
+    // Serial.println(maxwell.driver->get_fault_status_2_string());
+    // Serial.println(pwm_input.read_percentage());
 }
-*/

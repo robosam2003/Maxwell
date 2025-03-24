@@ -55,21 +55,25 @@ namespace Maxwell {
         curr_struct = new Currents{0, 0, 0, 0, 0, 0, 0};
 
         pwm_3x = new pwm_3x_struct();
-        pwm_3x->PIN_A = 1; pwm_3x->PIN_B = 1; pwm_3x->PIN_C = 1;
+        pwm_3x->PIN_A = 1; pwm_3x->PIN_B = 0; pwm_3x->PIN_C = 0;
 
         instance = this;
     }
 
     void Maxwell::Compare_A_callback() {
         instance->pwm_3x->PIN_A = (instance->pwm_3x->PIN_A)? 0 : 1;
+        digitalWrite(DRV8323_HI_A_PIN, instance->pwm_3x->PIN_A);
     }
 
     void Maxwell::Compare_B_callback() {
         instance->pwm_3x->PIN_B = (instance->pwm_3x->PIN_B)? 0 : 1;
+        digitalWrite(DRV8323_HI_B_PIN, instance->pwm_3x->PIN_B);
     }
 
     void Maxwell::Compare_C_callback() {
         instance->pwm_3x->PIN_C = (instance->pwm_3x->PIN_C)? 0 : 1;
+        digitalWrite(DRV8323_HI_C_PIN, instance->pwm_3x->PIN_C);
+        // Serial.println("C callback");
     }
 
     void Maxwell::setup() {
@@ -128,45 +132,52 @@ namespace Maxwell {
         uint8_t pin_a = DRV8323_HI_A_PIN;
         uint8_t pin_b = DRV8323_HI_B_PIN;
         uint8_t pin_c = DRV8323_HI_C_PIN;
-        // pin_a = PB1  = TIM3_CH4
-        // pin_b = PA3  = TIM5_CH4
-        // pin_c = PA1  = TIM2_CH2
-        TIM_TypeDef *Instance_a = TIM3;
-        pwm_3x->channel_a = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_a), PinMap_PWM));
+        // TIM_A = TIM1_CH3
+        // TIM_B = TIM2_CH4
+        // TIM_C = TIM5_CH2
+        TIM_TypeDef *Instance_a = TIM1;
+        pwm_3x->channel_a = 3; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_a), PinMap_PWM));
         pwm_3x->TIM_A = new HardwareTimer(Instance_a);
         // pwm_3x->TIM_A->attachInterrupt(pwm_3x->channel_a, Compare_A_callback);
 
-        TIM_TypeDef *Instance_b = TIM5;
-        pwm_3x->channel_b = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_b), PinMap_PWM));
+        TIM_TypeDef *Instance_b = TIM2;
+        pwm_3x->channel_b = 4;  //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_b), PinMap_PWM));
         pwm_3x->TIM_B = new HardwareTimer(Instance_b);
         // pwm_3x->TIM_B->attachInterrupt(pwm_3x->channel_b, Compare_B_callback);
 
         TIM_TypeDef *Instance_c = TIM2;
-        pwm_3x->channel_c = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
+        pwm_3x->channel_c = 2; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
         pwm_3x->TIM_C = new HardwareTimer(Instance_c);
         // pwm_3x->TIM_C->attachInterrupt(pwm_3x->channel_c, Compare_C_callback);
 
         uint32_t COUNTER_MODE = TIM_COUNTERMODE_CENTERALIGNED3;  // Counter Rise and then fall
-        TimerModes_t PWM_MODE = TIMER_OUTPUT_COMPARE_PWM1; // == TIM_OCMODE_PWM1             pin high when counter < channel compare, low otherwise
+        TimerModes_t PWM_MODE = TIMER_OUTPUT_DISABLED;
         pwm_3x->TIM_A->pause();
-        pwm_3x->TIM_A->setMode(pwm_3x->channel_a, PWM_MODE, pin_a);
+        pwm_3x->TIM_A->setMode(pwm_3x->channel_a, PWM_MODE, NC);
         pwm_3x->TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
         pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_A->setPWM(pwm_3x->channel_a, pin_a, pwm_3x->FREQ, 0);  // This clearly sets something up that I've forgot - No pwm output without it LOL
         pwm_3x->TIM_A->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_A->setCaptureCompare(pwm_3x->channel_a, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
+        pwm_3x->TIM_A->attachInterrupt(pwm_3x->channel_a, Compare_A_callback);
         pwm_3x->TIM_B->pause();
-        pwm_3x->TIM_B->setMode(pwm_3x->channel_b, PWM_MODE, pin_b);
+        pwm_3x->TIM_B->setMode(pwm_3x->channel_b, PWM_MODE, NC);
         pwm_3x->TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
         pwm_3x->TIM_B->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_B->setPWM(pwm_3x->channel_b, pin_b, pwm_3x->FREQ, 0);
         pwm_3x->TIM_B->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_B->setCaptureCompare(pwm_3x->channel_b, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
+        pwm_3x->TIM_B->attachInterrupt(pwm_3x->channel_b, Compare_B_callback);
         pwm_3x->TIM_C->pause();
-        pwm_3x->TIM_C->setMode(pwm_3x->channel_c, PWM_MODE, pin_c);
+        pwm_3x->TIM_C->setMode(pwm_3x->channel_c, PWM_MODE, NC);
         pwm_3x->TIM_C->getHandle()->Init.CounterMode = COUNTER_MODE;
         pwm_3x->TIM_C->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_C->setPWM(pwm_3x->channel_c, pin_c, pwm_3x->FREQ, 0);
         pwm_3x->TIM_C->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_C->setCaptureCompare(pwm_3x->channel_c, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
-        HAL_TIM_Base_Init(pwm_3x->TIM_A->getHandle());
+        pwm_3x->TIM_C->attachInterrupt(pwm_3x->channel_c, Compare_C_callback);
+
+        HAL_TIM_Base_Init(pwm_3x->TIM_A->getHandle());;
         HAL_TIM_Base_Init(pwm_3x->TIM_B->getHandle());
         HAL_TIM_Base_Init(pwm_3x->TIM_C->getHandle());
     }
@@ -409,7 +420,23 @@ namespace Maxwell {
         digitalWrite(DRV8323_LO_B_PIN, HIGH);
         digitalWrite(DRV8323_LO_C_PIN, HIGH);
 
-        set_pwm(0, 0, 50, pwm_3x->RESOLUTION);
+
+        while (true) {
+            // pwm_input->read();
+            double theta = static_cast<double>(pwm_input->read_percentage()) / 100 * 2 * PI;
+            Serial.println(theta);
+            float sin_theta = sin(theta);
+            float cos_theta = cos(theta);
+
+            // Generate three sin waves, offset by 120 degrees
+            float U_a = sin(theta)          * max_voltage;
+            float U_b = sin(theta - 2*PI/3) * max_voltage;
+            float U_c = sin(theta + 2*PI/3) * max_voltage;
+
+            set_phase_voltages(U_a, U_b, U_c);
+        }
+
+        // set_pwm(127, 20, 127, pwm_3x->RESOLUTION);
 
 
 
@@ -418,7 +445,7 @@ namespace Maxwell {
         // uint32_t a = pwm_3x->TIM_A->getHandle()->Instance->CCR3;
         // uint32_t b = pwm_3x->TIM_B->getHandle()->Instance->CCR4;
         // uint32_t c = pwm_3x->TIM_C->getHandle()->Instance->CCR2;
-
+        //
         // uint32_t cnt_a = pwm_3x->TIM_A->getHandle()->Instance->CNT;
         //
         //
@@ -427,8 +454,8 @@ namespace Maxwell {
         // Serial.print(instance->pwm_3x->PIN_C + 3); Serial.print(" ");
         // // Serial.print(out_b); Serial.print(" ");
         // // Serial.print(out_c); Serial.print(" ");
-        // Serial.print(static_cast<float>(cnt_a) / 65535); Serial.print(" ");
-        //
+        // Serial.print(static_cast<float>(cnt_a)); Serial.print(" ");
+
         // Serial.println();
         // delay(10);
     }

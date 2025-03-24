@@ -78,7 +78,7 @@ namespace Maxwell {
         FOC* foc;
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
-        float max_voltage = 4;
+        float max_voltage = 2;
 
         static Maxwell* instance;
 
