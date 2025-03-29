@@ -23,13 +23,14 @@
 #define DRV8323_DRIVE_CAL_PIN       PC8
 #define DRV8323_GATE_EN_PIN         PC9
 
-#define DRV8323_HI_A_PIN            PB1  // Also called INHA
-#define DRV8323_HI_B_PIN            PA3
-#define DRV8323_HI_C_PIN            PA1
+#define DRV8323_HI_A_PIN            PB_1  // Also called INHA
+#define DRV8323_HI_B_PIN            PA_3
+#define DRV8323_HI_C_PIN            PA_1
 
-#define DRV8323_LO_A_PIN            PB15
-#define DRV8323_LO_B_PIN            PA2
-#define DRV8323_LO_C_PIN            PB8
+
+#define DRV8323_LO_A_PIN            PB_15
+#define DRV8323_LO_B_PIN            PA_2
+#define DRV8323_LO_C_PIN            PB_8
 
 #define DRV8323_PWM1X_PIN           DRV8323_HI_A_PIN
 #define DRV8323_STATE0_PIN          DRV8323_LO_A_PIN

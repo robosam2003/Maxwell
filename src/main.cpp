@@ -324,7 +324,7 @@ void setup() {
 
     maxwell.setup();
     maxwell.init_pwm();
-    maxwell.sync_pwm();
+    // maxwell.sync_pwm();
     // hall_sensor.setup(true, hall_a_callback, hall_b_callback, hall_c_callback);
     // maxwell.hall_sensor = &hall_sensor;
     pwm_input.set_callback(pwm_callback);

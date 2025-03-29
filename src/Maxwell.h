@@ -61,9 +61,9 @@ namespace Maxwell {
         uint32_t RESOLUTION;
         uint32_t MAX_COMPARE_VALUE; // 2^RESOLUTION - 1
 
-        uint8_t PIN_A;
-        uint8_t PIN_B;
-        uint8_t PIN_C;
+        uint8_t PIN_A_STATE;
+        uint8_t PIN_B_STATE;
+        uint8_t PIN_C_STATE;
     };
 
 
@@ -78,15 +78,18 @@ namespace Maxwell {
         FOC* foc;
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
-        float max_voltage = 2;
+        float max_voltage = 1;
 
         static Maxwell* instance;
 
 
 
-        static void Compare_A_callback();
-        static void Compare_B_callback();
-        static void Compare_C_callback();
+        volatile static void Compare_A_callback();
+        volatile static void Compare_B_callback();
+        volatile static void Compare_C_callback();
+        volatile static void Update_A_callback();
+        volatile static void Update_B_callback();
+        volatile static void Update_C_callback();
 
 
         Maxwell(); // Constructor
