@@ -108,11 +108,9 @@ namespace Maxwell {
 
         void setup();
 
-        void init_pwm_nc();
-
         void init_pwm_3x();
 
-        void init_pwm();
+        void init_pwm_6x();
 
         void sync_timer_frequencies(long pwm_frequency);
 
@@ -128,7 +126,7 @@ namespace Maxwell {
 
         void foc_position_control();
 
-        void svpwm_position_control();
+        void sinusoidal_position_control();
 
         alpha_beta_struct clarke_transform(PhaseCurrents currents);  // Currents to alpha-beta
 

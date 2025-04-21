@@ -518,40 +518,17 @@ void loop() {
 #include <Arduino.h>
 #include "pin_definitions.h"
 #include "Maxwell.h"
-#include "FreeRTOS.h"
-#include "task.h"
-#include "timers.h"
 #include "PWMInput.h"
-// #include "AS5047P.h"
-#include "current_sensors.h"
-// #include <stm32f4xx.h>
 
 Maxwell::Maxwell maxwell;
-// // Maxwell::HallSensor hall_sensor(HALL_A_PIN, HALL_B_PIN, HALL_C_PIN);
 PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
-// CurrentSensors current_sensors(DRV8323_CURR_SENSE_A_PIN,
-//                                 DRV8323_CURR_SENSE_B_PIN,
-//                                 DRV8323_CURR_SENSE_C_PIN,
-//                                 DRV8323::CSA_GAIN::GAIN_5_V_V);
-
-// void hall_a_callback() {
-//     hall_sensor.callback_a();
-// }
-// void hall_b_callback() {
-//     hall_sensor.callback_b();
-// }
-// void hall_c_callback() {
-//     hall_sensor.callback_c();
-// }
 void pwm_callback() {
     pwm_input.pwm_callback();
 }
 
 void setup() {
     delay(100);
-    // analogWriteResolution(8);
-    // analogWriteFrequency(1000);
     Serial.begin(921600);
 
     maxwell.setup();
@@ -566,21 +543,10 @@ void setup() {
 
 
 void loop() {
-    // analogWrite(DRV8323_HI_A_PIN, 70);
-    // analogWrite(DRV8323_HI_B_PIN, 0);
-    // analogWrite(DRV8323_HI_C_PIN, 0);
-    // delay(100);
-    // analogWrite(DRV8323_HI_A_PIN, 0);
-    // analogWrite(DRV8323_HI_B_PIN, 0);
-    // analogWrite(DRV8323_HI_C_PIN, 0);
-    // delay(2000);
-    // Serial.println(`
-    maxwell.svpwm_position_control();
+    maxwell.sinusoidal_position_control();
     // maxwell.foc_position_control();
-
-
 
     // Serial.println(maxwell.driver->get_fault_status_1_string());
     // Serial.println(maxwell.driver->get_fault_status_2_string());
-    // Serial.println(pwm_input.read_percentage());
+
 }

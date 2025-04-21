@@ -271,82 +271,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         Serial.println("Maxwell setup complete");
     }
 
-    void Maxwell::init_pwm_nc() {
-        pwm_3x->RESOLUTION = 16;
-        pwm_3x->MAX_COMPARE_VALUE = static_cast<uint32_t>(pow(2, pwm_3x->RESOLUTION)) - 1;
-        pwm_3x->FREQ = 20000 * 2;
-
-        uint8_t pin_a = DRV8323_HI_A_PIN;
-        uint8_t pin_b = DRV8323_HI_B_PIN;
-        uint8_t pin_c = DRV8323_HI_C_PIN;
-        uint32_t prescale_value = 4;
-        // TIM_A = TIM1_CH3
-        // TIM_B = TIM2_CH4
-        // TIM_C = TIM5_CH2
-        TIM_TypeDef *Instance_a = TIM4;
-        pwm_3x->channel_a = 1; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_a), PinMap_PWM));
-        pwm_3x->TIM_A = new HardwareTimer(Instance_a);
-        pwm_3x->TIM_A->setPrescaleFactor(prescale_value);
-        // pwm_3x->TIM_A->attachInterrupt(pwm_3x->channel_a, Compare_A_callback);
-
-        TIM_TypeDef *Instance_b = TIM2;
-        pwm_3x->channel_b = 4;  //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_b), PinMap_PWM));
-        pwm_3x->TIM_B = new HardwareTimer(Instance_b);
-        pwm_3x->TIM_B->setPrescaleFactor(prescale_value);
-        // pwm_3x->TIM_B->attachInterrupt(pwm_3x->channel_b, Compare_B_callback);
-
-        TIM_TypeDef *Instance_c = TIM3;
-        pwm_3x->channel_c = 2; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
-        pwm_3x->TIM_C = new HardwareTimer(Instance_c);
-        pwm_3x->TIM_C->setPrescaleFactor(prescale_value);
-        // pwm_3x->TIM_C->attachInterrupt(pwm_3x->channel_c, Compare_C_callback);
-
-        sync_pwm();
-
-        uint32_t COUNTER_MODE = TIM_COUNTERMODE_CENTERALIGNED3;  // Counter Rise and then fall
-        TimerModes_t PWM_MODE = TIMER_OUTPUT_DISABLED;
-        pwm_3x->TIM_A->pause();
-        pwm_3x->TIM_A->setMode(pwm_3x->channel_a, PWM_MODE, NC);
-        pwm_3x->TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 1;
-        pwm_3x->TIM_A->setPWM(pwm_3x->channel_a, PB6, pwm_3x->FREQ, 0);  // This clearly sets something up that I've forgot - No pwm output without it LOL
-        pwm_3x->TIM_A->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
-        pwm_3x->TIM_A->setCaptureCompare(pwm_3x->channel_a, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
-
-        pwm_3x->TIM_B->pause();
-        pwm_3x->TIM_B->setMode(pwm_3x->channel_b, PWM_MODE, NC);
-        pwm_3x->TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_B->getHandle()->Init.RepetitionCounter = 1;
-        pwm_3x->TIM_B->setPWM(pwm_3x->channel_b, PA3, pwm_3x->FREQ, 0);
-        pwm_3x->TIM_B->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
-        pwm_3x->TIM_B->setCaptureCompare(pwm_3x->channel_b, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
-
-        pwm_3x->TIM_C->pause();
-        pwm_3x->TIM_C->setMode(pwm_3x->channel_c, PWM_MODE, NC);
-        pwm_3x->TIM_C->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_C->getHandle()->Init.RepetitionCounter = 1;
-        pwm_3x->TIM_C->setPWM(pwm_3x->channel_c, PB5, pwm_3x->FREQ, 0);
-        pwm_3x->TIM_C->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
-        pwm_3x->TIM_C->setCaptureCompare(pwm_3x->channel_c, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
-
-        // pwm_3x->TIM_A->attachInterrupt(Update_A_callback);
-        // pwm_3x->TIM_B->attachInterrupt(Update_B_callback);
-        // pwm_3x->TIM_C->attachInterrupt(Update_C_callback);
-
-
-        pwm_3x->TIM_A->attachInterrupt(pwm_3x->channel_a, Compare_A_callback);
-        pwm_3x->TIM_B->attachInterrupt(pwm_3x->channel_b, Compare_B_callback);
-        pwm_3x->TIM_C->attachInterrupt(pwm_3x->channel_c, Compare_C_callback);
-
-        HAL_TIM_Base_Init(pwm_3x->TIM_A->getHandle());;
-        HAL_TIM_Base_Init(pwm_3x->TIM_B->getHandle());
-        HAL_TIM_Base_Init(pwm_3x->TIM_C->getHandle());
-
-        sync_pwm();
-
-
-    }
-
     void Maxwell::init_pwm_3x() {
         pwm_3x->RESOLUTION = 16;
         pwm_3x->MAX_COMPARE_VALUE = static_cast<uint32_t>(pow(2, pwm_3x->RESOLUTION)) - 1;
@@ -418,7 +342,7 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         sync_pwm();
     }
 
-    void Maxwell::init_pwm() {
+    void Maxwell::init_pwm_6x() {
         pwm_3x->RESOLUTION = 16;
         pwm_3x->MAX_COMPARE_VALUE = static_cast<uint32_t>(pow(2, pwm_3x->RESOLUTION)) - 1;
         pwm_3x->FREQ = pwm_frequency * 2;
@@ -766,14 +690,16 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         all_off();
     }
 
-    void Maxwell::svpwm_position_control() {
+    void Maxwell::sinusoidal_position_control() {
         driver->enable(true);
 
-        // digitalWrite(DRV8323_LO_A_PIN, HIGH);
-        // digitalWrite(DRV8323_LO_B_PIN, HIGH);
-        // digitalWrite(DRV8323_LO_C_PIN, HIGH);
-
+        // Ensure these are pulled high
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
+
+        digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
+
         PIDController sinusoidal_pid_controller =
             PIDController(1,
                             0.1,
@@ -784,20 +710,13 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         float theta = 0;
 
         while (true) {
-            // pwm_input->read();
-
-            theta = static_cast<float>(pwm_input->read_percentage()) / 100 * 2 * PI * POLE_PAIRS_6374;
-            // theta += 0.005;
+            // theta = static_cast<float>(pwm_input->read_percentage()) / 100 * 2 * PI * POLE_PAIRS_6374;
+            theta += 0.002;
             theta = fmod(theta, 2*PI);
             sinusoidal_pid_controller.set_setpoint(theta);
             float current_angle = encoder->get_angle();
             sinusoidal_pid_controller.update(current_angle);
             // sinusoidal_pid_controller.print_state();
-
-
-
-
-            // Serial.println(theta);
 
             // Generate three sin waves, offset by 120 degrees
             float U_a = sin(theta)          * max_voltage/2;
@@ -805,37 +724,12 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
             float U_c = sin(theta + 2*PI/3) * max_voltage/2;
 
             set_phase_voltages(U_a, U_b, U_c);
-            // Serial.println(driver->get_fault_status_1_string());
-            // Serial.println(driver->get_fault_status_2_string());
             uint32_t current_time = micros();
             // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_a)); Serial.print(" ");
             // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_b)); Serial.print(" ");
             // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_c)); Serial.print("\n");
             // driver->clear_fault();
         }
-
-        // set_pwm(127, 20, 127, pwm_3x->RESOLUTION);
-
-
-
-        // Debugging output
-        //Get the PWM output value:
-        // uint32_t a = pwm_3x->TIM_A->getHandle()->Instance->CCR3;
-        // uint32_t b = pwm_3x->TIM_B->getHandle()->Instance->CCR4;
-        // uint32_t c = pwm_3x->TIM_C->getHandle()->Instance->CCR2;
-        //
-        // uint32_t cnt_a = pwm_3x->TIM_A->getHandle()->Instance->CNT;
-        //
-        //
-        // Serial.print(instance->pwm_3x->PIN_A + 1); Serial.print(" ");
-        // Serial.print(instance->pwm_3x->PIN_B + 2); Serial.print(" ");
-        // Serial.print(instance->pwm_3x->PIN_C + 3); Serial.print(" ");
-        // // Serial.print(out_b); Serial.print(" ");
-        // // Serial.print(out_c); Serial.print(" ");
-        // Serial.print(static_cast<float>(cnt_a)); Serial.print(" ");
-
-        // Serial.println();
-        // delay(10);
     }
 
     alpha_beta_struct Maxwell::clarke_transform(PhaseCurrents currents) { // currents to alpha-beta
@@ -848,7 +742,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
 
     dq_struct Maxwell::park_transform(alpha_beta_struct ab_vec) { // alpha-beta to dq
         // the park transform
-
         float theta = encoder->get_angle(); // Assuming we're aligned with the encoder!
         float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
         float d = ab_vec.alpha * cos(electrical_theta)  + ab_vec.beta * sin(electrical_theta);
@@ -879,7 +772,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         curr_struct->phase_currents = currents;
         return currents;
     }
-
 
     void Maxwell::drive_hall_velocity() { // velocity is in electrical rads/s, duration is in ms
         uint8_t six_step_commutation_states_ccw[6][6] = {
