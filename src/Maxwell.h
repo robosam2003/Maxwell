@@ -15,6 +15,8 @@
 #include "PWMInput.h"
 #include "current_sensors.h"
 
+
+
 namespace Maxwell {
 
     struct triggered {
@@ -64,6 +66,14 @@ namespace Maxwell {
         uint8_t PIN_A_STATE;
         uint8_t PIN_B_STATE;
         uint8_t PIN_C_STATE;
+
+        uint32_t prev_cnt_a;
+        uint32_t prev_cnt_b;
+        uint32_t prev_cnt_c;
+
+        bool rising_a;
+        bool rising_b;
+        bool rising_c;
     };
 
 
@@ -78,7 +88,9 @@ namespace Maxwell {
         FOC* foc;
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
-        float max_voltage = 1;
+        uint32_t pwm_frequency = 5000;
+        float max_voltage = 2;
+        float offset = 0.5; // V
 
         static Maxwell* instance;
 
@@ -96,7 +108,11 @@ namespace Maxwell {
 
         void setup();
 
+        void init_pwm_nc();
+
         void init_pwm();
+
+        void sync_timer_frequencies(long pwm_frequency);
 
         void sync_pwm();
 

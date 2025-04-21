@@ -292,7 +292,7 @@ void loop() {
 #include "PWMInput.h"
 // #include "AS5047P.h"
 #include "current_sensors.h"
-#include <stm32f4xx.h>
+// #include <stm32f4xx.h>
 
 Maxwell::Maxwell maxwell;
 // // Maxwell::HallSensor hall_sensor(HALL_A_PIN, HALL_B_PIN, HALL_C_PIN);
@@ -330,6 +330,8 @@ void setup() {
     pwm_input.set_callback(pwm_callback);
     maxwell.pwm_input = &pwm_input;
     maxwell.driver->perform_current_sense_calibration();
+    maxwell.driver->clear_fault();
+
     // maxwell.driver->current_sensors->calibrate_offsets();
 }
 
@@ -345,8 +347,11 @@ void loop() {
     // analogWrite(DRV8323_HI_C_PIN, 0);
     // delay(2000);
     // Serial.println(`
-
     maxwell.svpwm_position_control();
+    // maxwell.foc_position_control();
+
+
+
     // Serial.println(maxwell.driver->get_fault_status_1_string());
     // Serial.println(maxwell.driver->get_fault_status_2_string());
     // Serial.println(pwm_input.read_percentage());

@@ -45,7 +45,7 @@
 
 // CAN
 #define CAN2_TX_PIN                 PB13
-#define CAN2_RX_PIN                 PB12
+#define CAN2_RX_PIN                 PB12`
 #define CAN_S_PIN                   PB14
 #define CAN_FAULT_PIN               PC6
 

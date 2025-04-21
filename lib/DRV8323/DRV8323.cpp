@@ -251,7 +251,7 @@ namespace DRV8323 {
 
     void DRV8323::default_configuration() {
         enable(true);
-        set_pwm_mode(PWM_MODE::PWM_6x);
+        set_pwm_mode(PWM_MODE::PWM_3x);
         enable_CPUV_Fault(false);
         enable_GDF(false);
         set_current_gain(CSA_GAIN::GAIN_40_V_V);
