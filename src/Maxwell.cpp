@@ -176,6 +176,11 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         // instance->pwm_3x->PIN_A_STATE = (instance->pwm_3x->PIN_A_STATE)? 0 : 1;
         // digitalWriteFast(DRV8323_HI_A_PIN, instance->pwm_3x->PIN_A_STATE);
         // digitalWriteFast(DRV8323_LO_A_PIN, not (digitalReadFast(DRV8323_HI_A_PIN)));
+
+        // HI_A = PB1, LO_A = PB15
+
+        // GPIOB->ODR = GPIO_ODR_OD1 & (GPIOB->IDR ^ GPIO_IDR_ID15);
+        // HAL_GPIO_WritePin(GPIOB, 1, static_cast<GPIO_PinState>(not HAL_GPIO_ReadPin(GPIOB, 15)));
         digitalWriteFast(DRV8323_HI_A_PIN, not (digitalReadFast(DRV8323_LO_A_PIN)));
     }
 
@@ -188,7 +193,12 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         // instance->pwm_3x->PIN_B_STATE = (instance->pwm_3x->PIN_B_STATE)? 0 : 1;
         // digitalWriteFast(DRV8323_HI_B_PIN, instance->pwm_3x->PIN_B_STATE);
         // digitalWriteFast(DRV8323_LO_B_PIN, not (digitalReadFast(DRV8323_HI_B_PIN)));
+        // uint32_t start = micros();
         digitalWriteFast(DRV8323_HI_B_PIN, not (digitalReadFast(DRV8323_LO_B_PIN)));
+        // digitalToggleFast(DRV8323_HI_B_PIN);
+        // digitalWriteFast(PB_2, 1);
+        // uint32_t end = micros();
+        // Serial.println(end - start);
     }
 
     volatile void Maxwell::Compare_C_callback() {
@@ -224,7 +234,7 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
 
         pinMode(GREEN_LED_PIN, OUTPUT);
         // Breakout to a driver class?
-        pinMode(DRV8323_HI_A_PIN, OUTPUT);
+        pinMode(DRV8323_HI_A_PIN, OUTPUT_OPEN_DRAIN);
         pinMode(DRV8323_HI_B_PIN, OUTPUT);
         pinMode(DRV8323_HI_C_PIN, OUTPUT);
         pinMode(DRV8323_LO_A_PIN, OUTPUT);
@@ -232,16 +242,18 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         pinMode(DRV8323_LO_C_PIN, OUTPUT);
 
         driver->default_configuration();
-        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
-        driver->set_gate_drive_source_current(DRV8323::IDRIVE_P_CURRENT::IDRIVEP_1000mA);
-        driver->set_gate_drive_sink_current(DRV8323::IDRIVE_N_CURRENT::IDRIVEN_2000mA);
-        driver->set_peak_gate_drive_time(DRV8323::TDRIVE_TIME::TDRIVE_1000ns);
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
+        driver->set_gate_drive_source_current(DRV8323::IDRIVE_P_CURRENT::IDRIVEP_10mA);
+        driver->set_gate_drive_sink_current(DRV8323::IDRIVE_N_CURRENT::IDRIVEN_20mA);
+        driver->set_peak_gate_drive_time(DRV8323::TDRIVE_TIME::TDRIVE_500ns);
+
+        driver->set_dead_time(DRV8323::DEAD_TIMES::DEAD_TIME_50NS);
         driver->enable(true);
 
         // Tie the low side pins HIGH to avoid hi-z state - Only in PWM_3X mode
-        // digitalWrite(DRV8323_LO_A_PIN, HIGH);
-        // digitalWrite(DRV8323_LO_B_PIN, HIGH);
-        // digitalWrite(DRV8323_LO_C_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_A_PIN, 1);
+        digitalWriteFast(DRV8323_LO_B_PIN, 1);
+        digitalWriteFast(DRV8323_LO_C_PIN, 1);
 
 
         pinMode(DRV8323_GATE_EN_PIN, OUTPUT);
@@ -255,8 +267,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         pinMode(DRV8323_CURR_SENSE_A_PIN, INPUT);
         pinMode(DRV8323_CURR_SENSE_B_PIN, INPUT);
         pinMode(DRV8323_CURR_SENSE_C_PIN, INPUT);
-
-
 
         Serial.println("Maxwell setup complete");
     }
@@ -337,6 +347,77 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
 
     }
 
+    void Maxwell::init_pwm_3x() {
+        pwm_3x->RESOLUTION = 16;
+        pwm_3x->MAX_COMPARE_VALUE = static_cast<uint32_t>(pow(2, pwm_3x->RESOLUTION)) - 1;
+        pwm_3x->FREQ = pwm_frequency * 2;
+
+        // Set APB1 prescaler
+        RCC->CFGR |= RCC_CFGR_PPRE1_DIV4;
+        // Set APB2 prescaler
+        RCC->CFGR |= RCC_CFGR_PPRE2_DIV4;
+
+        PinName pin_a = DRV8323_HI_A_PIN;
+        PinName pin_b = DRV8323_HI_B_PIN;
+        PinName pin_c = DRV8323_HI_C_PIN;
+        uint32_t prescale_value = 4;
+        // TIM_A = TIM1_CH3
+        // TIM_B = TIM2_CH4
+        // TIM_C = TIM5_CH2
+        TIM_TypeDef *Instance_a = TIM1;// (TIM_TypeDef *)pinmap_peripheral(pin_a, PinMap_PWM);
+        pwm_3x->channel_a = STM_PIN_CHANNEL(pinmap_function(pin_a, PinMap_PWM));
+        pwm_3x->TIM_A = new HardwareTimer(Instance_a);
+
+        TIM_TypeDef *Instance_b = TIM2; //(TIM_TypeDef *)pinmap_peripheral(pin_b, PinMap_PWM);
+        pwm_3x->channel_b = STM_PIN_CHANNEL(pinmap_function(pin_b, PinMap_PWM));
+        pwm_3x->TIM_B = new HardwareTimer(Instance_b);
+
+        TIM_TypeDef *Instance_c = TIM2;//(TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(pin_c), PinMap_PWM);
+        pwm_3x->channel_c = STM_PIN_CHANNEL(pinmap_function(pin_c, PinMap_PWM));
+        pwm_3x->TIM_C = new HardwareTimer(Instance_c);
+
+
+        sync_pwm();
+
+        uint32_t COUNTER_MODE = TIM_COUNTERMODE_CENTERALIGNED3;  // Counter Rise and then fall
+        TimerModes_t PWM_MODE = TIMER_OUTPUT_COMPARE_PWM1;
+
+        pwm_3x->TIM_A->setMode(pwm_3x->channel_a, PWM_MODE, pin_a);
+        pwm_3x->TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
+        pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_A->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
+        pwm_3x->TIM_A->setCaptureCompare(pwm_3x->channel_a, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
+
+        pwm_3x->TIM_B->setMode(pwm_3x->channel_b, PWM_MODE, pin_b);
+        pwm_3x->TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
+        pwm_3x->TIM_B->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_B->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
+        pwm_3x->TIM_B->setCaptureCompare(pwm_3x->channel_b, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
+
+        pwm_3x->TIM_C->setMode(pwm_3x->channel_c, PWM_MODE, pin_c);
+        pwm_3x->TIM_C->getHandle()->Init.CounterMode = COUNTER_MODE;
+        pwm_3x->TIM_C->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_C->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
+        pwm_3x->TIM_C->setCaptureCompare(pwm_3x->channel_c, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
+
+
+        HAL_TIM_Base_Init(pwm_3x->TIM_A->getHandle());;
+        HAL_TIM_Base_Init(pwm_3x->TIM_B->getHandle());
+        HAL_TIM_Base_Init(pwm_3x->TIM_C->getHandle());
+
+        // Syncronise the timers with a master timer.
+        LL_TIM_SetSlaveMode(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_SLAVEMODE_DISABLED);
+        LL_TIM_SetTriggerOutput(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_TRGO_ENABLE);
+
+        // Configure the other two timers to get their input trigger from the master timer:
+        for (auto timer : {pwm_3x->TIM_B, pwm_3x->TIM_C}) {
+            LL_TIM_SetTriggerInput(timer->getHandle()->Instance, _getInternalSourceTrigger(pwm_3x->TIM_A, timer));
+            LL_TIM_SetSlaveMode(timer->getHandle()->Instance, LL_TIM_SLAVEMODE_TRIGGER);
+        }
+
+        sync_pwm();
+    }
+
     void Maxwell::init_pwm() {
         pwm_3x->RESOLUTION = 16;
         pwm_3x->MAX_COMPARE_VALUE = static_cast<uint32_t>(pow(2, pwm_3x->RESOLUTION)) - 1;
@@ -347,9 +428,9 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         // Set APB2 prescaler
         RCC->CFGR |= RCC_CFGR_PPRE2_DIV4;
 
-        uint8_t pin_a = DRV8323_LO_A_PIN; //DRV8323_HI_A_PIN;
-        uint8_t pin_b = DRV8323_LO_B_PIN; //DRV8323_HI_B_PIN;
-        uint8_t pin_c = DRV8323_LO_C_PIN; //DRV8323_HI_C_PIN;
+        PinName pin_a = DRV8323_LO_A_PIN; //DRV8323_HI_A_PIN;
+        PinName pin_b = DRV8323_LO_B_PIN; //DRV8323_HI_B_PIN;
+        PinName pin_c = DRV8323_LO_C_PIN; //DRV8323_HI_C_PIN;
         uint32_t prescale_value = 4;
         // TIM_A = TIM1_CH3
         // TIM_B = TIM2_CH4
@@ -368,9 +449,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         pwm_3x->channel_c = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
         pwm_3x->TIM_C = new HardwareTimer(Instance_c);
         // pwm_3x->TIM_C->setPrescaleFactor(prescale_value);
-
-
-
 
 
         sync_pwm();
@@ -416,7 +494,7 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
 
 
         // sync_timer_frequencies(pwm_3x->FREQ);
-        // sync_pwm();
+        sync_pwm();
 
         // Syncronise the timers with a master timer.
         LL_TIM_SetSlaveMode(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_SLAVEMODE_DISABLED);
@@ -458,9 +536,7 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         }
     }
 
-
     void Maxwell::sync_pwm() {
-        noInterrupts();
         pwm_3x->TIM_A->pause();
         pwm_3x->TIM_A->refresh();
         pwm_3x->TIM_B->pause();
@@ -471,7 +547,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         pwm_3x->TIM_A->resume();
         pwm_3x->TIM_B->resume();
         pwm_3x->TIM_C->resume();
-        interrupts();
     }
 
     void Maxwell::set_pwm(uint32_t Ua, uint32_t Ub, uint32_t Uc, uint32_t resolution) {
@@ -698,7 +773,7 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         // digitalWrite(DRV8323_LO_B_PIN, HIGH);
         // digitalWrite(DRV8323_LO_C_PIN, HIGH);
 
-        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
         PIDController sinusoidal_pid_controller =
             PIDController(1,
                             0.1,
@@ -706,14 +781,18 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
                             0.0,
                             1,
                             1);
+        float theta = 0;
 
         while (true) {
             // pwm_input->read();
-            float theta = static_cast<float>(pwm_input->read_percentage()) / 100 * 2 * PI;
+
+            theta = static_cast<float>(pwm_input->read_percentage()) / 100 * 2 * PI * POLE_PAIRS_6374;
+            // theta += 0.005;
+            theta = fmod(theta, 2*PI);
             sinusoidal_pid_controller.set_setpoint(theta);
             float current_angle = encoder->get_angle();
             sinusoidal_pid_controller.update(current_angle);
-            sinusoidal_pid_controller.print_state();
+            // sinusoidal_pid_controller.print_state();
 
 
 
@@ -729,9 +808,9 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
             // Serial.println(driver->get_fault_status_1_string());
             // Serial.println(driver->get_fault_status_2_string());
             uint32_t current_time = micros();
-            Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_a)); Serial.print(" ");
-            Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_b)); Serial.print(" ");
-            Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_c)); Serial.print("\n");
+            // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_a)); Serial.print(" ");
+            // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_b)); Serial.print(" ");
+            // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_c)); Serial.print("\n");
             // driver->clear_fault();
         }
 

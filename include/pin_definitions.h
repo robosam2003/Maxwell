@@ -27,7 +27,6 @@
 #define DRV8323_HI_B_PIN            PA_3
 #define DRV8323_HI_C_PIN            PA_1
 
-
 #define DRV8323_LO_A_PIN            PB_15
 #define DRV8323_LO_B_PIN            PA_2
 #define DRV8323_LO_C_PIN            PB_8
@@ -45,7 +44,7 @@
 
 // CAN
 #define CAN2_TX_PIN                 PB13
-#define CAN2_RX_PIN                 PB12`
+#define CAN2_RX_PIN                 PB12
 #define CAN_S_PIN                   PB14
 #define CAN_FAULT_PIN               PC6
 

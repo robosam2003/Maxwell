@@ -75,6 +75,8 @@ public:
 
     void set_peak_gate_drive_time(TDRIVE_TIME time);
 
+    void set_dead_time(DEAD_TIMES time);
+
     void perform_current_sense_calibration();
 
     void enable_CPUV_Fault(bool enable);

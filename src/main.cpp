@@ -1,5 +1,238 @@
 
 /*
+// =============== 3X PWM testing =================
+#include <Arduino.h>
+#include <Maxwell.h>
+
+Maxwell::Maxwell maxwell;
+// function finds the appropriate timer source trigger for the master/slave timer combination
+// returns -1 if no trigger source is found
+// currently supports the master timers to be from TIM1 to TIM4 and TIM8
+int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
+  // put master and slave in temp variables to avoid arrows
+  TIM_TypeDef *TIM_master = master->getHandle()->Instance;
+  TIM_TypeDef *TIM_slave = slave->getHandle()->Instance;
+  #if defined(TIM1) && defined(LL_TIM_TS_ITR0)
+    if (TIM_master == TIM1){
+      #if defined(TIM2)
+      if(TIM_slave == TIM2) return LL_TIM_TS_ITR0;
+      #endif
+      #if defined(TIM3)
+      else if(TIM_slave == TIM3) return LL_TIM_TS_ITR0;
+      #endif
+      #if defined(TIM4)
+      else if(TIM_slave == TIM4) return LL_TIM_TS_ITR0;
+      #endif
+      #if defined(TIM8)
+      else if(TIM_slave == TIM8) return LL_TIM_TS_ITR0;
+      #endif
+    }
+  #endif
+  #if defined(TIM2) &&  defined(LL_TIM_TS_ITR1)
+    else if (TIM_master == TIM2){
+      #if defined(TIM1)
+      if(TIM_slave == TIM1) return LL_TIM_TS_ITR1;
+      #endif
+      #if defined(TIM3)
+      else if(TIM_slave == TIM3) return LL_TIM_TS_ITR1;
+      #endif
+      #if defined(TIM4)
+      else if(TIM_slave == TIM4) return LL_TIM_TS_ITR1;
+      #endif
+      #if defined(TIM8)
+      else if(TIM_slave == TIM8) return LL_TIM_TS_ITR1;
+      #endif
+      #if defined(TIM5)
+      else if(TIM_slave == TIM5) return LL_TIM_TS_ITR0;
+      #endif
+    }
+  #endif
+  #if defined(TIM3) &&  defined(LL_TIM_TS_ITR2)
+    else if (TIM_master == TIM3){
+      #if defined(TIM1)
+      if(TIM_slave == TIM1) return LL_TIM_TS_ITR2;
+      #endif
+      #if defined(TIM2)
+      else if(TIM_slave == TIM2) return LL_TIM_TS_ITR2;
+      #endif
+      #if defined(TIM4)
+      else if(TIM_slave == TIM4) return LL_TIM_TS_ITR2;
+      #endif
+      #if defined(TIM5)
+      else if(TIM_slave == TIM5) return LL_TIM_TS_ITR1;
+      #endif
+    }
+  #endif
+  #if defined(TIM4) &&  defined(LL_TIM_TS_ITR3)
+    else if (TIM_master == TIM4){
+      #if defined(TIM1)
+      if(TIM_slave == TIM1) return LL_TIM_TS_ITR3;
+      #endif
+      #if defined(TIM2)
+      else if(TIM_slave == TIM2) return LL_TIM_TS_ITR3;
+      #endif
+      #if defined(TIM3)
+      else if(TIM_slave == TIM3) return LL_TIM_TS_ITR3;
+      #endif
+      #if defined(TIM8)
+      else if(TIM_slave == TIM8) return LL_TIM_TS_ITR2;
+      #endif
+      #if defined(TIM5)
+      else if(TIM_slave == TIM5) return LL_TIM_TS_ITR1;
+      #endif
+    }
+  #endif
+  #if defined(TIM5)
+    else if (TIM_master == TIM5){
+      #if !defined(STM32L4xx) // only difference between F4,F1 and L4
+      #if defined(TIM1)
+      if(TIM_slave == TIM1) return LL_TIM_TS_ITR0;
+      #endif
+      #if defined(TIM3)
+      else if(TIM_slave == TIM3) return LL_TIM_TS_ITR2;
+      #endif
+      #endif
+      #if defined(TIM8)
+      if(TIM_slave == TIM8) return LL_TIM_TS_ITR3;
+      #endif
+    }
+  #endif
+  #if defined(TIM8)
+    else if (TIM_master == TIM8){
+      #if defined(TIM2)
+      if(TIM_slave==TIM2) return LL_TIM_TS_ITR1;
+      #endif
+      #if defined(TIM4)
+      else if(TIM_slave == TIM4) return LL_TIM_TS_ITR3;
+      #endif
+      #if defined(TIM5)
+      else if(TIM_slave == TIM5) return LL_TIM_TS_ITR3;
+      #endif
+    }
+  #endif
+  return -1; // combination not supported
+}
+
+
+PinName pin_a = DRV8323_HI_A_PIN;
+PinName pin_b = DRV8323_HI_B_PIN;
+PinName pin_c = DRV8323_HI_C_PIN;
+
+TIM_TypeDef *Instance_a = TIM1;// (TIM_TypeDef *)pinmap_peripheral(pin_a, PinMap_PWM);
+uint32_t channel_a = STM_PIN_CHANNEL(pinmap_function(pin_a, PinMap_PWM));
+HardwareTimer *TIM_A = new HardwareTimer(Instance_a);
+
+TIM_TypeDef *Instance_b = TIM2; //(TIM_TypeDef *)pinmap_peripheral(pin_b, PinMap_PWM);
+uint32_t channel_b = STM_PIN_CHANNEL(pinmap_function(pin_b, PinMap_PWM));
+HardwareTimer *TIM_B = new HardwareTimer(Instance_b);
+
+TIM_TypeDef *Instance_c = TIM2;//(TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(pin_c), PinMap_PWM);
+uint32_t channel_c = STM_PIN_CHANNEL(pinmap_function(pin_c, PinMap_PWM));
+HardwareTimer *TIM_C = new HardwareTimer(Instance_c);
+
+// PARAMS
+uint32_t pwm_freq = 20000 * 2;
+uint32_t pwm_resolution = 8;
+
+
+
+void sync_pwm() {
+    TIM_A->pause();
+    TIM_A->refresh();
+    TIM_B->pause();
+    TIM_B->refresh();
+    TIM_C->pause();
+    TIM_C->refresh();
+
+    TIM_A->resume();
+    TIM_B->resume();
+    TIM_C->resume();
+}
+
+void init_pwm() {
+    // Set APB1 prescaler
+    RCC->CFGR |= RCC_CFGR_PPRE1_DIV4;
+    // Set APB2 prescaler
+    RCC->CFGR |= RCC_CFGR_PPRE2_DIV4;
+
+    uint32_t COUNTER_MODE = TIM_COUNTERMODE_CENTERALIGNED3;  // Counter Rise and then fall
+    TimerModes_t PWM_MODE = TIMER_OUTPUT_COMPARE_PWM1;
+
+    TIM_A->setMode(channel_a, PWM_MODE, pin_a);
+    TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
+    TIM_A->getHandle()->Init.RepetitionCounter = 1;
+    TIM_A->setOverflow(pwm_freq, HERTZ_FORMAT);
+    TIM_A->setCaptureCompare(channel_a, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
+
+    TIM_B->setMode(channel_b, PWM_MODE, pin_b);
+    TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
+    TIM_B->getHandle()->Init.RepetitionCounter = 1;
+    TIM_B->setOverflow(pwm_freq, HERTZ_FORMAT);
+    TIM_B->setCaptureCompare(channel_b, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
+
+    TIM_C->setMode(channel_c, PWM_MODE, pin_c);
+    TIM_C->getHandle()->Init.CounterMode = COUNTER_MODE;
+    TIM_C->getHandle()->Init.RepetitionCounter = 1;
+    TIM_C->setOverflow(pwm_freq, HERTZ_FORMAT);
+    TIM_C->setCaptureCompare(channel_c, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
+
+    HAL_TIM_Base_Init(TIM_A->getHandle());
+    HAL_TIM_Base_Init(TIM_B->getHandle());
+    HAL_TIM_Base_Init(TIM_C->getHandle());
+}
+
+void set_pwm(uint32_t Ua, uint32_t Ub, uint32_t Uc, uint32_t resolution) {
+    // constrain(Ua, 0.0, static_cast<float>(pow(2, resolution)) - 1);
+    // constrain(Ub, 0.0, static_cast<float>(pow(2, resolution)) - 1);
+    // constrain(Uc, 0.0, static_cast<float>(pow(2, resolution)) - 1);
+    // (Ua < 2.0)? Ua = 0 : Ua;
+    // (Ub < 2.0)? Ub = 0 : Ub;
+    // (Uc < 2.0)? Uc = 0 : Uc;
+    TIM_A->setOverflow(pwm_freq, HERTZ_FORMAT);
+    TIM_B->setOverflow(pwm_freq, HERTZ_FORMAT);
+    TIM_C->setOverflow(pwm_freq, HERTZ_FORMAT);
+    TIM_A->setCaptureCompare(channel_a, Ua, static_cast<TimerCompareFormat_t>(resolution));
+    TIM_B->setCaptureCompare(channel_b, Ub, static_cast<TimerCompareFormat_t>(resolution));
+    TIM_C->setCaptureCompare(channel_c, Uc, static_cast<TimerCompareFormat_t>(resolution));
+}
+
+void set_master_slave_mode() {
+    LL_TIM_SetSlaveMode(TIM_A->getHandle()->Instance, LL_TIM_SLAVEMODE_DISABLED);
+    LL_TIM_SetTriggerOutput(TIM_A->getHandle()->Instance, LL_TIM_TRGO_ENABLE);
+
+    // Configure the other two timers to get their input trigger from the master timer:
+    for (auto timer : {TIM_B, TIM_C}) {
+        LL_TIM_SetTriggerInput(timer->getHandle()->Instance, _getInternalSourceTrigger(TIM_A, timer));
+        LL_TIM_SetSlaveMode(timer->getHandle()->Instance, LL_TIM_SLAVEMODE_TRIGGER);
+    }
+}
+
+void setup() {
+    Serial.begin(9600);
+    maxwell.setup();
+    maxwell.driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
+    init_pwm();
+    set_pwm(200, 127, 60, pwm_resolution);
+
+    set_master_slave_mode();
+    sync_pwm();
+
+    // TIM_A->setPWM(channel_a, pin_a, 20000, 50);
+    // TIM_B->setPWM(channel_b, pin_b, 20000, 50);
+    // TIM_C->setPWM(channel_c, pin_c, 20000, 20);
+    maxwell.driver->clear_fault();
+}
+
+
+void loop() {
+    Serial.println(maxwell.driver->get_fault_status_1_string());
+    Serial.println(maxwell.driver->get_fault_status_2_string());
+}
+
+
+
+
+/*
 #include <Arduino.h>
 #include "pin_definitions.h"
 #include "Maxwell.h"
@@ -37,9 +270,9 @@ Maxwell::Maxwell maxwell;
 #define STM32F405RGT6
 #define PWM_RESOLUTION 8
 
-uint8_t pin_a = DRV8323_HI_A_PIN;
-uint8_t pin_b = DRV8323_HI_B_PIN;
-uint8_t pin_c = DRV8323_HI_C_PIN;
+PinName pin_a = DRV8323_HI_A_PIN;
+PinName pin_b = DRV8323_HI_B_PIN;
+PinName pin_c = DRV8323_HI_C_PIN;
 // SOLENOID = PA10 = TIM1_CH3
 // pin_a = PB1  = TIM3_CH4
 // pin_b = PA3  = TIM2_CH4
@@ -57,17 +290,17 @@ uint8_t pin_c = DRV8323_HI_C_PIN;
 
 
 
-TIM_TypeDef *Instance_a = TIM1; //(TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(pin_a), PinMap_PWM);
-uint32_t channel_a = 3; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_a), PinMap_PWM));
+TIM_TypeDef *Instance_a = TIM1; //(TIM_TypeDef *)pinmap_peripheral(pin_a, PinMap_PWM);
+uint32_t channel_a = STM_PIN_CHANNEL(pinmap_function(pin_a, PinMap_PWM));
 HardwareTimer *TIM_A = new HardwareTimer(Instance_a);
 //
-TIM_TypeDef *Instance_b = TIM2; //(TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(pin_b), PinMap_PWM);
-uint32_t channel_b = 4; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_b), PinMap_PWM));
-HardwareTimer *TIM_B = new HardwareTimer(Instance_b);
+// TIM_TypeDef *Instance_b = TIM2; //(TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(pin_b), PinMap_PWM);
+// uint32_t channel_b = 4; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_b), PinMap_PWM));
+// HardwareTimer *TIM_B = new HardwareTimer(Instance_b);
 //
-TIM_TypeDef *Instance_c = TIM5;//(TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(pin_c), PinMap_PWM);
-uint32_t channel_c = 2; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
-HardwareTimer *TIM_C = new HardwareTimer(Instance_c);
+// TIM_TypeDef *Instance_c = TIM5;//(TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(pin_c), PinMap_PWM);
+// uint32_t channel_c = 2; //STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
+// HardwareTimer *TIM_C = new HardwareTimer(Instance_c);
 
 uint32_t pwm_freq = 1000 * 2;
 
@@ -159,44 +392,44 @@ void Compare_C_callback() {
 
 void init_pwm() {
     uint32_t COUNTER_MODE = TIM_COUNTERMODE_CENTERALIGNED3;
-    TimerModes_t PWM_MODE = TIMER_OUTPUT_DISABLED; //TIMER_OUTPUT_COMPARE_PWM1;
+    TimerModes_t PWM_MODE = TIMER_OUTPUT_COMPARE_PWM2;
 
-    TIM_A->pause();
-    TIM_A->setMode(channel_a, PWM_MODE, NC);
-    TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
-    TIM_A->getHandle()->Init.RepetitionCounter = 1;
+    // TIM_A->pause();
+    // TIM_A->setMode(channel_a, PWM_MODE, pin_a);
+    // TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
+    // TIM_A->getHandle()->Init.RepetitionCounter = 1;
     TIM_A->setPWM(channel_a, pin_a, pwm_freq, 0);
-    TIM_A->setOverflow(pwm_freq, HERTZ_FORMAT);
-    TIM_A->setCaptureCompare(channel_a, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
-    TIM_A->attachInterrupt(Update_A_callback);
-    TIM_A->attachInterrupt(channel_a, Compare_A_callback);
+    // TIM_A->setOverflow(pwm_freq, HERTZ_FORMAT);
+    // TIM_A->setCaptureCompare(channel_a, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
+    // TIM_A->attachInterrupt(Update_A_callback);
+    // TIM_A->attachInterrupt(channel_a, Compare_A_callback);
 
-    TIM_B->pause();
-    TIM_B->setMode(channel_b, PWM_MODE, NC);
-    TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
-    TIM_B->getHandle()->Init.RepetitionCounter = 1;
-    TIM_B->setPWM(channel_b, pin_b, pwm_freq, 0);
-    TIM_B->setOverflow(pwm_freq, HERTZ_FORMAT);
-    TIM_B->setCaptureCompare(channel_b, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
-    TIM_B->attachInterrupt(Update_B_callback);
-    TIM_B->attachInterrupt(channel_b, Compare_B_callback);
-
-    TIM_C->pause();
-    TIM_C->setMode(channel_c, PWM_MODE, NC);
-    TIM_C->getHandle()->Init.CounterMode = COUNTER_MODE;
-    TIM_C->getHandle()->Init.RepetitionCounter = 1;
-    TIM_C->setPWM(channel_c, pin_c, pwm_freq, 0);
-    TIM_C->setOverflow(pwm_freq, HERTZ_FORMAT);
-    TIM_C->setCaptureCompare(channel_c, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
-    TIM_C->attachInterrupt(Update_C_callback);
-    TIM_C->attachInterrupt(channel_c, Compare_C_callback);
-
-
+    // TIM_B->pause();
+    // TIM_B->setMode(channel_b, PWM_MODE, NC);
+    // TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
+    // TIM_B->getHandle()->Init.RepetitionCounter = 1;
+    // TIM_B->setPWM(channel_b, pin_b, pwm_freq, 0);
+    // TIM_B->setOverflow(pwm_freq, HERTZ_FORMAT);
+    // TIM_B->setCaptureCompare(channel_b, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
+    // TIM_B->attachInterrupt(Update_B_callback);
+    // TIM_B->attachInterrupt(channel_b, Compare_B_callback);
+    //
+    // TIM_C->pause();
+    // TIM_C->setMode(channel_c, PWM_MODE, NC);
+    // TIM_C->getHandle()->Init.CounterMode = COUNTER_MODE;
+    // TIM_C->getHandle()->Init.RepetitionCounter = 1;
+    // TIM_C->setPWM(channel_c, pin_c, pwm_freq, 0);
+    // TIM_C->setOverflow(pwm_freq, HERTZ_FORMAT);
+    // TIM_C->setCaptureCompare(channel_c, 0, static_cast<TimerCompareFormat_t>(PWM_RESOLUTION));
+    // TIM_C->attachInterrupt(Update_C_callback);
+    // TIM_C->attachInterrupt(channel_c, Compare_C_callback);
 
 
-    HAL_TIM_Base_Init(TIM_A->getHandle());
-    HAL_TIM_Base_Init(TIM_B->getHandle());
-    HAL_TIM_Base_Init(TIM_C->getHandle());
+
+
+    // HAL_TIM_Base_Init(TIM_A->getHandle());
+    // HAL_TIM_Base_Init(TIM_B->getHandle());
+    // HAL_TIM_Base_Init(TIM_C->getHandle());
 
 }
 
@@ -211,12 +444,12 @@ void set_pwm(uint32_t Ua, uint32_t Ub, uint32_t Uc) {
     // constrain(Ub, 0, 100);
     // constrain(Uc, 0, 100);
     TIM_A->setOverflow(pwm_freq, HERTZ_FORMAT);
-    TIM_B->setOverflow(pwm_freq, HERTZ_FORMAT);
-    TIM_C->setOverflow(pwm_freq, HERTZ_FORMAT);
+    // TIM_B->setOverflow(pwm_freq, HERTZ_FORMAT);
+    // TIM_C->setOverflow(pwm_freq, HERTZ_FORMAT);
     //
     TIM_A->setCaptureCompare(channel_a, Ua, RESOLUTION_8B_COMPARE_FORMAT);
-    TIM_B->setCaptureCompare(channel_b, Ub, RESOLUTION_8B_COMPARE_FORMAT);
-    TIM_C->setCaptureCompare(channel_c, Uc, RESOLUTION_8B_COMPARE_FORMAT);
+    // TIM_B->setCaptureCompare(channel_b, Ub, RESOLUTION_8B_COMPARE_FORMAT);
+    // TIM_C->setCaptureCompare(channel_c, Uc, RESOLUTION_8B_COMPARE_FORMAT);
 
     // TIM_A->setPWM(channel_a, pin_a, pwm_freq, Ua);
     // TIM_B->setPWM(channel_b, pin_b, pwm_freq, Ub);
@@ -228,14 +461,14 @@ void set_pwm(uint32_t Ua, uint32_t Ub, uint32_t Uc) {
 void sync_pwm() {
     TIM_A->pause();
     TIM_A->refresh();
-    TIM_B->pause();
-    TIM_B->refresh();
-    TIM_C->pause();
-    TIM_C->refresh();
+    // TIM_B->pause();
+    // TIM_B->refresh();
+    // TIM_C->pause();
+    // TIM_C->refresh();
 
     TIM_A->resume();
-    TIM_B->resume();
-    TIM_C->resume();
+    // TIM_B->resume();
+    // TIM_C->resume();
 }
 
 
@@ -245,6 +478,8 @@ void setup() {
 
     digitalWrite(pin_b, LOW);
     digitalWrite(pin_c, LOW);
+
+
 
     delay(1000);
     maxwell.setup();
@@ -257,9 +492,8 @@ void setup() {
 
 
 void loop() {
-
-
-    set_pwm(127, 50, 10);
+    TIM_A->setPWM(channel_a, pin_a, pwm_freq, 50);
+    // set_pwm(127, 50, 10);
     // set_pwm(10, 50, 95);
     print_state();
     // Serial.print((uint32_t)TIM_A->getHandle()->Instance, HEX); ; Serial.print(" ");
@@ -279,8 +513,6 @@ void loop() {
 
 }
 */
-
-
 
 // -----------------------------------------------------------------------------------
 #include <Arduino.h>
@@ -323,16 +555,12 @@ void setup() {
     Serial.begin(921600);
 
     maxwell.setup();
-    maxwell.init_pwm();
-    // maxwell.sync_pwm();
-    // hall_sensor.setup(true, hall_a_callback, hall_b_callback, hall_c_callback);
-    // maxwell.hall_sensor = &hall_sensor;
+    maxwell.init_pwm_3x();
+
     pwm_input.set_callback(pwm_callback);
     maxwell.pwm_input = &pwm_input;
     maxwell.driver->perform_current_sense_calibration();
     maxwell.driver->clear_fault();
-
-    // maxwell.driver->current_sensors->calibrate_offsets();
 }
 
 

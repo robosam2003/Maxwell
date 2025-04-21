@@ -234,6 +234,13 @@ namespace DRV8323 {
         write_reg(REGISTER::GATE_DRIVE_LS, data);
     }
 
+    void DRV8323::set_dead_time(DEAD_TIMES time) {
+        uint16_t data = read_reg(REGISTER::OCP_CONTROL);
+        data = data & 0b10011111111; // Mask the DT bits
+        data = data | (time << 8);   // Set the DT bits
+        write_reg(REGISTER::OCP_CONTROL, data);
+    }
+
     void DRV8323::perform_current_sense_calibration() {
         uint16_t data = read_reg(REGISTER::CSA_CONTROL);
         setBit(&data, 4, 1);  // Channel A

@@ -106,6 +106,13 @@ enum TDRIVE_TIME {
     TDRIVE_4000ns = 0b11,
 };
 
+enum DEAD_TIMES {
+    DEAD_TIME_50NS = 0b00,
+    DEAD_TIME_100NS = 0b01,
+    DEAD_TIME_200NS = 0b10,
+    DEAD_TIME_400NS = 0b11
+};
+
 enum DIRECTION {
     FORWARD =   0b0,
     REVERSE =   0b1
