@@ -93,6 +93,11 @@ double CurrentSensors::get_current_c() {
   return _current_c;
 }
 
+double* CurrentSensors::get_currents() {
+  double currents[3] = {_current_a, _current_b, _current_c};
+  return currents;
+}
+
 double CurrentSensors::get_total_current() {
   return _current_a + _current_b + _current_c;
 }

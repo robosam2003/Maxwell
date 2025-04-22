@@ -12,113 +12,7 @@ namespace Maxwell {
     #define MAX_SPEED 2000 // electrical rads/s
     Maxwell *Maxwell::instance = nullptr;
 
-// function finds the appropriate timer source trigger for the master/slave timer combination
-// returns -1 if no trigger source is found
-// currently supports the master timers to be from TIM1 to TIM4 and TIM8
-int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
-  // put master and slave in temp variables to avoid arrows
-  TIM_TypeDef *TIM_master = master->getHandle()->Instance;
-  TIM_TypeDef *TIM_slave = slave->getHandle()->Instance;
-  #if defined(TIM1) && defined(LL_TIM_TS_ITR0)
-    if (TIM_master == TIM1){
-      #if defined(TIM2)
-      if(TIM_slave == TIM2) return LL_TIM_TS_ITR0;
-      #endif
-      #if defined(TIM3)
-      else if(TIM_slave == TIM3) return LL_TIM_TS_ITR0;
-      #endif
-      #if defined(TIM4)
-      else if(TIM_slave == TIM4) return LL_TIM_TS_ITR0;
-      #endif
-      #if defined(TIM8)
-      else if(TIM_slave == TIM8) return LL_TIM_TS_ITR0;
-      #endif
-    }
-  #endif
-  #if defined(TIM2) &&  defined(LL_TIM_TS_ITR1)
-    else if (TIM_master == TIM2){
-      #if defined(TIM1)
-      if(TIM_slave == TIM1) return LL_TIM_TS_ITR1;
-      #endif
-      #if defined(TIM3)
-      else if(TIM_slave == TIM3) return LL_TIM_TS_ITR1;
-      #endif
-      #if defined(TIM4)
-      else if(TIM_slave == TIM4) return LL_TIM_TS_ITR1;
-      #endif
-      #if defined(TIM8)
-      else if(TIM_slave == TIM8) return LL_TIM_TS_ITR1;
-      #endif
-      #if defined(TIM5)
-      else if(TIM_slave == TIM5) return LL_TIM_TS_ITR0;
-      #endif
-    }
-  #endif
-  #if defined(TIM3) &&  defined(LL_TIM_TS_ITR2)
-    else if (TIM_master == TIM3){
-      #if defined(TIM1)
-      if(TIM_slave == TIM1) return LL_TIM_TS_ITR2;
-      #endif
-      #if defined(TIM2)
-      else if(TIM_slave == TIM2) return LL_TIM_TS_ITR2;
-      #endif
-      #if defined(TIM4)
-      else if(TIM_slave == TIM4) return LL_TIM_TS_ITR2;
-      #endif
-      #if defined(TIM5)
-      else if(TIM_slave == TIM5) return LL_TIM_TS_ITR1;
-      #endif
-    }
-  #endif
-  #if defined(TIM4) &&  defined(LL_TIM_TS_ITR3)
-    else if (TIM_master == TIM4){
-      #if defined(TIM1)
-      if(TIM_slave == TIM1) return LL_TIM_TS_ITR3;
-      #endif
-      #if defined(TIM2)
-      else if(TIM_slave == TIM2) return LL_TIM_TS_ITR3;
-      #endif
-      #if defined(TIM3)
-      else if(TIM_slave == TIM3) return LL_TIM_TS_ITR3;
-      #endif
-      #if defined(TIM8)
-      else if(TIM_slave == TIM8) return LL_TIM_TS_ITR2;
-      #endif
-      #if defined(TIM5)
-      else if(TIM_slave == TIM5) return LL_TIM_TS_ITR1;
-      #endif
-    }
-  #endif
-  #if defined(TIM5)
-    else if (TIM_master == TIM5){
-      #if !defined(STM32L4xx) // only difference between F4,F1 and L4
-      #if defined(TIM1)
-      if(TIM_slave == TIM1) return LL_TIM_TS_ITR0;
-      #endif
-      #if defined(TIM3)
-      else if(TIM_slave == TIM3) return LL_TIM_TS_ITR2;
-      #endif
-      #endif
-      #if defined(TIM8)
-      if(TIM_slave == TIM8) return LL_TIM_TS_ITR3;
-      #endif
-    }
-  #endif
-  #if defined(TIM8)
-    else if (TIM_master == TIM8){
-      #if defined(TIM2)
-      if(TIM_slave==TIM2) return LL_TIM_TS_ITR1;
-      #endif
-      #if defined(TIM4)
-      else if(TIM_slave == TIM4) return LL_TIM_TS_ITR3;
-      #endif
-      #if defined(TIM5)
-      else if(TIM_slave == TIM5) return LL_TIM_TS_ITR3;
-      #endif
-    }
-  #endif
-  return -1; // combination not supported
-}
+
 
 
     Maxwell::Maxwell()  {
@@ -167,6 +61,7 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         instance = this;
     }
 
+    // Are these compare statements obselete?
     volatile void Maxwell::Compare_A_callback() {
         // Get the count value and compare it to the compare value
         // uint32_t cnt = instance->pwm_3x->TIM_A->getCount();
@@ -216,7 +111,10 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
     }
 
     volatile void Maxwell::Update_A_callback() {
-        instance->pwm_3x->prev_cnt_a = micros();
+        uint32_t cnt = instance->pwm_3x->TIM_A->getCount();
+        // if (cnt < instance->pwm_3x->MAX_COMPARE_VALUE) {
+        //
+        // }
     }
 
     volatile void Maxwell::Update_B_callback() {
@@ -311,6 +209,7 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 1;
         pwm_3x->TIM_A->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_A->setCaptureCompare(pwm_3x->channel_a, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
+        // pwm_3x->TIM_A->attachInterrupt(Update_A_callback);
 
         pwm_3x->TIM_B->setMode(pwm_3x->channel_b, PWM_MODE, pin_b);
         pwm_3x->TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
@@ -498,8 +397,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         Vb = constrain(Vb, offset, max_voltage+offset) / input_voltage * static_cast<float>(pwm_3x->MAX_COMPARE_VALUE);
         Vc = constrain(Vc, offset, max_voltage+offset) / input_voltage * static_cast<float>(pwm_3x->MAX_COMPARE_VALUE);
 
-        // Serial.print(Va); Serial.print(" "); Serial.print(Vb); Serial.print(" "); Serial.println(Vc);
-
         set_pwm(static_cast<uint32_t>(Va),
             static_cast<uint32_t>(Vb),
             static_cast<uint32_t>(Vc),
@@ -617,9 +514,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
     }
 
     void Maxwell::foc_position_control() {
-        // Running in 6x PWM mode
-        // driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
-
         // Enable the driver
         driver->enable(true);
 
@@ -690,12 +584,55 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         all_off();
     }
 
+    void Maxwell::voltage_torque_control() {
+        driver->enable(true);
+        // Ensure 3x PWM setup
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
+        digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
+
+        float zero_electrical_angle = encoder->get_angle();
+
+        while (true) {
+            String text = "";
+            // Read pwm input and map as a voltage:
+            float U_q = pwm_input->read_percentage() / 100.0 * max_voltage;
+            text += static_cast<String>(U_q); text += "/";
+            // Voltage Limit
+            // U_q = constrain(U_q, 0, max_voltage);
+            // Read the encoder angle
+            float theta = encoder->get_angle() - zero_electrical_angle;
+            text += static_cast<String>(theta); text += "/";
+            float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
+
+            // Calculate the required voltages
+            float U_alpha = U_q*_sin(electrical_theta);
+            float U_beta  = U_q*_cos(electrical_theta);
+            text += static_cast<String>(U_alpha); text += "/";
+            text += static_cast<String>(U_beta); text += "/";
+
+            // Calculate the phase voltages
+            float v_a = U_alpha;
+            float v_b = (-U_alpha + M_SQRT3*U_beta) / 2;
+            float v_c = (-U_alpha - M_SQRT3*U_beta) / 2;
+            text += static_cast<String>(v_a); text += "/";
+            text += static_cast<String>(v_b); text += "/";
+            text += static_cast<String>(v_c); text += "/";
+
+
+            // Set the phase voltages
+            set_phase_voltages(v_a, v_b, v_c);
+            Serial.println(text);
+        }
+
+    }
+
+
     void Maxwell::sinusoidal_position_control() {
         driver->enable(true);
-
-        // Ensure these are pulled high
+        // Ensure 3x PWM setup
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
-
         digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
@@ -708,27 +645,41 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
                             1,
                             1);
         float theta = 0;
-
+        int i = 0;
         while (true) {
             // theta = static_cast<float>(pwm_input->read_percentage()) / 100 * 2 * PI * POLE_PAIRS_6374;
-            theta += 0.002;
-            theta = fmod(theta, 2*PI);
-            sinusoidal_pid_controller.set_setpoint(theta);
-            float current_angle = encoder->get_angle();
-            sinusoidal_pid_controller.update(current_angle);
+            theta -= 0.0001;
+            theta = fmod(theta, _2PI);
+            // sinusoidal_pid_controller.set_setpoint(theta);
+            // float current_angle = encoder->get_angle();
+            // sinusoidal_pid_controller.update(current_angle);
             // sinusoidal_pid_controller.print_state();
 
             // Generate three sin waves, offset by 120 degrees
-            float U_a = sin(theta)          * max_voltage/2;
-            float U_b = sin(theta - 2*PI/3) * max_voltage/2;
-            float U_c = sin(theta + 2*PI/3) * max_voltage/2;
+            float U_a = _sin(theta)          * max_voltage/2;
+            float U_b = _sin(theta - 2*_PI_3) * max_voltage/2;
+            float U_c = _sin(theta + 2*_PI_3) * max_voltage/2;
+
+            // if (i% 1000 == 0) Serial.println(U_b);
 
             set_phase_voltages(U_a, U_b, U_c);
-            uint32_t current_time = micros();
-            // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_a)); Serial.print(" ");
-            // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_b)); Serial.print(" ");
-            // Serial.print(1.0 / static_cast<float>(current_time - pwm_3x->prev_cnt_c)); Serial.print("\n");
-            // driver->clear_fault();
+            // double* currents = driver->current_sensors->get_currents();
+            if (i % 1500 == 0) {
+                driver->current_sensors->read();
+                double currents[3] = {driver->current_sensors->get_current_a(),
+                                        driver->current_sensors->get_current_b(),
+                                        driver->current_sensors->get_current_c()};
+                double average = (currents[0] + currents[1] + currents[2]) / 3;
+                double rel_currents[3] = {
+                    (currents[0] - average),
+                    (currents[1] - average),
+                    (currents[2] - average)
+                };
+                Serial.print(rel_currents[0]); Serial.print(" ");
+                Serial.print(rel_currents[1]); Serial.print(" ");
+                Serial.println(rel_currents[2]);
+            }
+            i++;
         }
     }
 
@@ -862,7 +813,6 @@ int _getInternalSourceTrigger(HardwareTimer* master, HardwareTimer* slave) {
         digitalWrite(DRV8323_HI_C_PIN, 0);
         digitalWrite(DRV8323_LO_C_PIN, 0);
     }
-
 
     void Maxwell::drive_velocity(int velocity, int duration) { // velocity is in ms, duration is in ms
         // constrain velocity to 0-255

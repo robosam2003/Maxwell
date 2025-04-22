@@ -79,7 +79,7 @@ namespace AS5047P {
         angle = angle & 0b0011111111111111; // Mask the 2 MSB bits
         float radian_angle = (static_cast<float>(angle) / 16384.0) * 2 * PI;
         float degree_angle = static_cast<float>(angle) / 16384.0 * 360;
-        radian_angle = 2 * PI - radian_angle; // Invert the angle
+        // radian_angle = 2 * PI - radian_angle; // Invert the angle
         return radian_angle;
     }
 

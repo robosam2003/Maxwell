@@ -44,6 +44,7 @@ public:
   double get_current_a();
   double get_current_b();
   double get_current_c();
+  double* get_currents();
   double get_total_current();
 };
 
