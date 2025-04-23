@@ -89,7 +89,7 @@ namespace Maxwell {
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 2;
+        float max_voltage = 3;
         float offset = 0.5; // V
 
         static Maxwell* instance;

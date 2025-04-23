@@ -705,6 +705,8 @@ namespace Maxwell {
     alpha_beta_struct Maxwell::reverse_park_transform(dq_struct dq_vec) {  // dq to alpha-beta
         float theta = encoder->get_angle(); // Assuming we're aligned with the encoder!
         float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
+        // float U_alpha = U_q*_sin(electrical_theta);
+        // float U_beta  = U_q*_cos(electrical_theta);
         float alpha = dq_vec.d * cos(electrical_theta) - dq_vec.q * sin(electrical_theta);
         float beta  = dq_vec.d * sin(electrical_theta) + dq_vec.q * cos(electrical_theta);
         alpha_beta_struct alpha_beta = {alpha, beta};
@@ -717,9 +719,9 @@ namespace Maxwell {
         //                     (-1/3)*ab_vec.alpha + (sqrt(3)/3)*ab_vec.beta,
         //                     (-1/3)*ab_vec.alpha - (sqrt(3)/3)*ab_vec.beta};
         PhaseCurrents currents;
-        currents.current_a = 0.3333*ab_vec.alpha;
-        currents.current_b = (-1/3)*ab_vec.alpha + (sqrt(3)/3)*ab_vec.beta;
-        currents.current_c = (-1/3)*ab_vec.alpha - (sqrt(3)/3)*ab_vec.beta;
+        currents.current_a = ab_vec.alpha;
+        currents.current_b = (-ab_vec.alpha + M_SQRT3*ab_vec.beta) / 2;
+        currents.current_c = (-ab_vec.alpha - M_SQRT3*ab_vec.beta) / 2;
         curr_struct->phase_currents = currents;
         return currents;
     }

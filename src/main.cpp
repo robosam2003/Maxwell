@@ -514,7 +514,7 @@ void loop() {
 }
 */
 
-/*
+
 // Goal is to read the adc with dma
 #include "Arduino.h"
 #include "pin_definitions.h"
@@ -529,28 +529,34 @@ uint32_t adc_value = 0;
 
 void setup() {
     Serial.begin(9600);
+    delay(1000);
     // PB0 = ADC1_IN8 or ADC2_IN8
 
+    __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_ADC1_CLK_ENABLE();
     __HAL_RCC_DMA2_CLK_ENABLE();
 
     pinMode(V_SENSE_A_PIN, INPUT);
 
-
     // Configure the adc
     hadc1.Instance = ADC1;
-    hadc1.Init.Resolution = ADC_RESOLUTION_8B;
-    hadc1.Init.ScanConvMode = DISABLE;
-    hadc1.Init.ContinuousConvMode = ENABLE;
+    hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+    hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+    hadc1.Init.ScanConvMode = ENABLE;
+    hadc1.Init.ContinuousConvMode = DISABLE;
     hadc1.Init.DiscontinuousConvMode = DISABLE;
+    hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+    hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
     hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-    hadc1.Init.NbrOfConversion = 1;
+    hadc1.Init.NbrOfConversion = 4;
+    hadc1.Init.DMAContinuousRequests = DISABLE;
+    hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
     HAL_ADC_Init(&hadc1);
 
     // Configure the adc channel
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = ADC_CHANNEL_10; // Replace with the channel corresponding to the pin
-    sConfig.Rank = ADC_REG_RANK_1_SQRX_BITOFFSET_POS;
+    sConfig.Rank = 1;
     sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
     HAL_ADC_ConfigChannel(&hadc1, &sConfig);
 
@@ -575,21 +581,26 @@ void setup() {
     // HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 
     // Start the ADC in DMA mode
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc_value, 1);
+    // HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc_value, 1);
 
-
+    Serial.println("Setup complete! ADC and DMA initialized.");
 }
 
 void loop() {
     HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc_value, 1);
-    Serial.println(adc_value);
+    // while (HAL_ADC_PollForConversion(&hadc1, 1) != HAL_OK);
+
+    Serial.println(HAL_ADC_GetValue(&hadc1));
     delay(10);
+    HAL_ADC_Stop_DMA(&hadc1);
 }
 
 // extern "C" void DMA2_Stream0_IRQHandler() {
 //     HAL_DMA_IRQHandler(&hdma_adc1);
+//
+//     Serial.println(adc_value);
 // }
-*/
+
 
 /*
 // Define the pin and configure it for analog input
@@ -625,7 +636,7 @@ HAL_ADC_ConfigChannel(&hadc1, &sConfig);
 
 
 
-
+/*
 
 
 // -----------------------------------------------------------------------------------
@@ -667,3 +678,5 @@ void loop() {
     // Serial.println(maxwell.driver->get_fault_status_2_string());
 
 }
+
+*/
