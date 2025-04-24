@@ -85,11 +85,11 @@ namespace Maxwell {
         PIDController* pid_controller;
         triggered* trigger;
         PWMInput* pwm_input;
-        FOC* foc;
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 3;
+        float max_voltage = 1;   // V
+        float max_current = 1;   // A
         float align_max_voltage = 1.5;
         float offset = 0.5; // V
 
@@ -130,9 +130,13 @@ namespace Maxwell {
 
         void foc_position_control();
 
+        void sinusoidal_position_control();
+
         void voltage_torque_control();
 
-        void sinusoidal_position_control();
+        void foc_current_torque_control();
+
+
 
         alpha_beta_struct clarke_transform(PhaseCurrents currents);  // Currents to alpha-beta
 

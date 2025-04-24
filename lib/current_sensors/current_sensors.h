@@ -34,7 +34,7 @@ public:
     double _current_a;
     double _current_b;
     double _current_c;
-	bool filtered = false;
+	bool filtered = true;
 
     explicit CurrentSensors(PinName pin_a,
                           PinName pin_b,

@@ -16,7 +16,7 @@ CurrentSensors::CurrentSensors(PinName pin_a, PinName pin_b, PinName pin_c, DRV8
     _offset_b = 0.0;
     _offset_c = 0.0;
 
-    double cuttoff_freq = 0.5;
+    double cuttoff_freq = 3;
     _filter_a = new RCFilter(cuttoff_freq);
     _filter_b = new RCFilter(cuttoff_freq);
     _filter_c = new RCFilter(cuttoff_freq);
@@ -44,7 +44,7 @@ void CurrentSensors::setup_injected_adc() {
     hadc1->Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
     hadc1->Init.Resolution = ADC_RESOLUTION_12B;
     hadc1->Init.ScanConvMode = ENABLE;
-    hadc1->Init.ContinuousConvMode = ENABLE; // For injected mode
+    hadc1->Init.ContinuousConvMode = DISABLE; // For injected mode
     hadc1->Init.DiscontinuousConvMode = DISABLE;
     hadc1->Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE; //
     hadc1->Init.ExternalTrigConv = ADC_SOFTWARE_START; // for now
