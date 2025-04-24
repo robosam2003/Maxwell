@@ -172,13 +172,15 @@ void setup() {
 
     maxwell.setup();
     maxwell.init_pwm_3x();
-    // maxwell.driver->current_sensors->setup_injected_adc();
+
 
     pwm_input.set_callback(pwm_callback);
     maxwell.pwm_input = &pwm_input;
-    // maxwell.driver->perform_current_sense_calibration();
-    // maxwell.driver->current_sensors->calibrate_offsets();
+    maxwell.driver->perform_current_sense_calibration();
+    maxwell.driver->current_sensors->calibrate_offsets();
     maxwell.driver->clear_fault();
+
+    maxwell.foc_init_sequence();
 }
 
 
@@ -187,7 +189,8 @@ void loop() {
     // maxwell.sinusoidal_position_control();
     // maxwell.foc_position_control();
     maxwell.voltage_torque_control();
-
+    // Serial.println(maxwell.encoder->get_angle());
+    // delay(10);
     // Serial.println(maxwell.driver->get_fault_status_1_string());
     // Serial.println(maxwell.driver->get_fault_status_2_string());
 

@@ -444,73 +444,62 @@ namespace Maxwell {
         Serial.println(text);
     }
 
-    void actuate_currents(PhaseCurrents command_currents, String &text) {
-        // 3X pwm mode
+    void Maxwell::foc_init_sequence() {
+        float old_max_voltage = max_voltage;
 
-        double current_a = command_currents.current_a;
-        double current_b = command_currents.current_b;
-        double current_c = command_currents.current_c;
+        driver->enable(true);
+        // Ensure 3x PWM setup
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
+        digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
+        encoder->update();
+        float zero_angle = encoder->get_angle();
+        float theta = 0;
+        for (long i=0; i<60000; i++) {
+            theta += 0.0001;
+            theta = fmod(theta, _2PI);
+            encoder->update();
+            if (i%1000==0) {
+                Serial.println(encoder->get_angle());
+            }
+            // Generate three sin waves, offset by 120 degrees
+            float U_a = _sin(theta)                * align_max_voltage/2;
+            float U_b = _sin(theta - 2*_PI_3) * align_max_voltage/2;
+            float U_c = _sin(theta + 2*_PI_3) * align_max_voltage/2;
+            set_phase_voltages(U_a, U_b, U_c);
+        }
+        encoder->update();
+        float top_angle = encoder->get_angle();
+        for (long i=0; i<60000; i++) {
+            theta -= 0.0001;
+            theta = fmod(theta, _2PI);
+            encoder->update();
+            if (i%1000==0) {
+                Serial.println(encoder->get_angle());
+            }
+            // Generate three sin waves, offset by 120 degrees
+            float U_a = _sin(theta)                * align_max_voltage/2;
+            float U_b = _sin(theta - 2*_PI_3) * align_max_voltage/2;
+            float U_c = _sin(theta + 2*_PI_3) * align_max_voltage/2;
+            set_phase_voltages(U_a, U_b, U_c);
+        }
+        float bottom_angle = encoder->get_angle();
 
-        double input_voltage = 12.0; // 12V
-        double voltage_limit = 3; // V
-        voltage_limit = constrain(voltage_limit, 0, input_voltage);
-        float centre = voltage_limit / 2;
-        double current_limit = 4.0; // 4A
-        double phase_resistance = 0.15; //
-        int max_level = (int)voltage_limit / input_voltage * 255;
-        // int max_level = 15;
+        // Calculate CW or CCW encoder configuration
+        float diff = top_angle - zero_angle;
 
-        float voltage_a = (current_a * phase_resistance);
-        float voltage_b = (current_b * phase_resistance);
-        float voltage_c = (current_c * phase_resistance);
-
-        text += "      ";
-        text += static_cast<String>(voltage_a); text += "/";
-        text += static_cast<String>(voltage_b); text += "/";
-        text += static_cast<String>(voltage_c); text += "/";
-
-        int level_a = constrain(level_a, 0, max_level);  // Cannot actuate a negative current
-        int level_b = constrain(level_b, 0, max_level);
-        int level_c = constrain(level_c, 0, max_level);
-
-
-        // running in 3x PWM mode
-        analogWrite(DRV8323_HI_A_PIN, level_a);
-        analogWrite(DRV8323_HI_B_PIN, level_b);
-        analogWrite(DRV8323_HI_C_PIN, level_c);
-        text += "      ";
-        text += static_cast<String>(level_a); text += "/";
-        text += static_cast<String>(level_b); text += "/";
-        text += static_cast<String>(level_c); text += "/";
-
-
-
-
-        /*
-        if (current_a > 0) {
-            analogWrite(DRV8323_HI_A_PIN, level_a);
-            digitalWrite(DRV8323_LO_A_PIN, LOW);
+        if (diff > 0) {
+            encoder->set_direction(AS5047P::DIRECTION::CW);
+        }
+        else if (diff < 0) {
+            encoder->set_direction(AS5047P::DIRECTION::CCW);
+            digitalWrite(GREEN_LED_PIN, HIGH);
         }
         else {
-            analogWrite(DRV8323_HI_A_PIN, LOW);
-            digitalWrite(DRV8323_LO_A_PIN, level_a);
+            Serial.println("DID NOT DETECT MOVEMENT");
         }
-        if (current_b > 0) {
-            analogWrite(DRV8323_HI_B_PIN, level_b);
-            digitalWrite(DRV8323_LO_B_PIN, LOW);
-        }
-        else {
-            analogWrite(DRV8323_HI_B_PIN, LOW);
-            digitalWrite(DRV8323_LO_B_PIN, level_b);
-        }
-        if (current_c > 0) {
-            analogWrite(DRV8323_HI_C_PIN, level_c);
-            digitalWrite(DRV8323_LO_C_PIN, LOW);
-        }
-        else {
-            analogWrite(DRV8323_HI_C_PIN, LOW);
-            digitalWrite(DRV8323_LO_C_PIN, level_c);
-        } */
+
     }
 
     void Maxwell::foc_position_control() {
@@ -592,7 +581,6 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
 
-        float zero_electrical_angle = encoder->get_angle();
         int i = 0;
         while (true) {
             String text = "";
@@ -602,7 +590,8 @@ namespace Maxwell {
             // Voltage Limit
             // U_q = constrain(U_q, 0, max_voltage);
             // Read the encoder angle
-            float theta = encoder->get_angle() - zero_electrical_angle;
+            encoder->update();
+            float theta = encoder->get_angle();
             text += static_cast<String>(theta); text += "/";
             float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
 
@@ -622,8 +611,6 @@ namespace Maxwell {
 
             if (i%100==0) {
                 // uint32_t start = micros();
-                // HAL_ADCEx_InjectedStart(driver->current_sensors->hadc1);
-                // driver->current_sensors->read();  // this conversion only takes 250us
                 double currents[3] = {driver->current_sensors->get_current_a(),
                             driver->current_sensors->get_current_b(),
                             driver->current_sensors->get_current_c()};
@@ -633,11 +620,19 @@ namespace Maxwell {
                     (currents[1]),
                     (currents[2])
                 };
+                // double rel_currents[3] = {
+                //     (currents[0] - currents[1]),
+                //     (currents[1] - currents[2]),
+                //     (currents[2] - currents[0])
+                // };
+
                 // uint32_t duration = micros() - start;
                 // Serial.println(duration);
-                Serial.print(rel_currents[0]); Serial.print(" ");
-                Serial.print(rel_currents[1]); Serial.print(" ");
-                Serial.println(rel_currents[2]);
+                // Serial.print(rel_currents[0]); Serial.print(" ");
+                // Serial.print(rel_currents[1]); Serial.print(" ");
+                // Serial.println(rel_currents[2]);
+                Serial.println(theta);
+                // Serial.println(encoder->get_velocity());
             }
 
             // Set the phase voltages
@@ -647,7 +642,6 @@ namespace Maxwell {
         }
 
     }
-
 
     void Maxwell::sinusoidal_position_control() {
         driver->enable(true);

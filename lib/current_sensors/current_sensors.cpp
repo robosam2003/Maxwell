@@ -25,20 +25,10 @@ CurrentSensors::CurrentSensors(PinName pin_a, PinName pin_b, PinName pin_c, DRV8
     hadc1 = new ADC_HandleTypeDef();
 
 
-  // set pins
-
-
-  // Set the ADCs to continuous sampling
-
-
-  // calibrate_offsets();
   setup_injected_adc();
 }
 
 void CurrentSensors::setup_injected_adc() {
-    delay(1000);
-
-
     // Assuming all pins belong to the same ADC (they do)
     // Enable clocks
     __HAL_RCC_ADC1_CLK_ENABLE();
@@ -110,7 +100,6 @@ void CurrentSensors::setup_injected_adc() {
       }
 
     }
-    delay(1000);
     Serial.println("SUCCESSFULLY SETUP INJECTED ADC");
 }
 
@@ -131,14 +120,15 @@ void CurrentSensors::calibrate_offsets() {
   _filter_c->prev_value = 0.0;
   for (int i = 0; i< num_samples; i++) {
     // Let the value settle
-    this->read();
+    get_current_a();
+    get_current_b();
+    get_current_c();
     delay(1);
   }
   for (int i = 0; i < num_samples; i++) {
-    this->read();
-    sum_a += _current_a;
-    sum_b += _current_b;
-    sum_c += _current_c;
+    sum_a += get_current_a();
+    sum_b += get_current_b();
+    sum_c += get_current_c();
     delay(1);
   }
   _offset_a = sum_a / num_samples;
@@ -146,36 +136,38 @@ void CurrentSensors::calibrate_offsets() {
   _offset_c = sum_c / num_samples;
   }
 
-void CurrentSensors::read() {
-  // double v_a = (analogRead(_pin_a)) * CURRENT_SENSE_CONVERSION_FACTOR;
-  // double v_b = (analogRead(_pin_b)) * CURRENT_SENSE_CONVERSION_FACTOR;
-  // double v_c = (analogRead(_pin_c)) * CURRENT_SENSE_CONVERSION_FACTOR;
-  // uint32_t current_time_us = micros();
-  //
-  // _current_a = _filter_a->update((3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a, current_time_us);
-  // _current_b = _filter_b->update((3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b, current_time_us);
-  // _current_c = _filter_c->update((3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c, current_time_us);
-  // // _current_a = (3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a;
-  // // _current_b = (3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b;
-  // // _current_c = (3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c;
-}
-
 double CurrentSensors::get_current_a() {
   double v_a = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_1) * CURRENT_SENSE_CONVERSION_FACTOR;
-  // _current_a = _filter_a->update((3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a, micros());
-  return v_a;
+  if (filtered) {
+    _current_a = _filter_a->update((3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a, micros());
+  }
+  else {
+    _current_a = (3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a;
+  }
+  return _current_a;
 }
 
 double CurrentSensors::get_current_b() {
   double v_b = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_2) * CURRENT_SENSE_CONVERSION_FACTOR;
-  // _current_b = _filter_b->update((3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b, micros());
-  return v_b;
+  if (filtered) {
+    _current_b = _filter_b->update((3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b, micros());
+  }
+  else {
+    _current_b = (3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b;
+  }
+
+  return _current_b;
 }
 
 double CurrentSensors::get_current_c() {
   double v_c = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_3) * CURRENT_SENSE_CONVERSION_FACTOR;
-  // _current_c = _filter_c->update((3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c, micros());
-  return v_c;
+  if (filtered) {
+    _current_c = _filter_c->update((3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c, micros());
+  }
+  else {
+    _current_c = (3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a;
+  }
+  return _current_c;
 }
 
 double* CurrentSensors::get_currents() {

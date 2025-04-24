@@ -17,6 +17,14 @@ namespace AS5047P {
         byte WRITE_BYTE = 0b00000000;
         SPIClass _spi;
         SPISettings _settings;
+        DIRECTION _direction;
+        float prev_rel_angle = 0.0; // Previous relative angle (0 to 2*pi)
+        long full_rotations = 0; // Number of full rotations
+        float absolute_angle = 0.0; // Absolute angle factoring in full rotations (radians)
+
+        uint32_t prev_time_us = 0; // Timestamp of the previous angle reading
+        float velocity = 0.0; // Angular velocity (radians/s)
+        bool comp = true;
 
     public:
         AS5047P(byte CS, SPIClass& spi, uint32_t spiFreq);
@@ -25,12 +33,18 @@ namespace AS5047P {
 
         void write_reg(REGISTER regAddress, uint16_t data);  // SPI write
 
-        float get_angle(bool comp = true);
+        void update();
+
+        float get_angle();
+
+        float get_velocity();
+
 
         uint16_t get_mag_strength();
+
+        void set_direction(DIRECTION direction);
+
     };
-
-
 
 } // namespace AS5047P
 

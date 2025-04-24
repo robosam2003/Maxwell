@@ -17,6 +17,11 @@ enum REGISTER {
     ANGLECOM    = 0x3FFF
 };
 
+enum DIRECTION {
+    CW = 0,
+    CCW = 1
+};
+
 }
 
 #endif //MAXWELL_AS5047P_CONSTANTS_H
