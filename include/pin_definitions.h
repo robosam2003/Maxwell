@@ -38,9 +38,9 @@
 #define DRV8323_DIR_PIN             DRV8323_HI_C_PIN
 #define DRV8323_BRAKE_PIN           DRV8323_LO_C_PIN
 
-#define DRV8323_CURR_SENSE_A_PIN    PB0
-#define DRV8323_CURR_SENSE_B_PIN    PC5
-#define DRV8323_CURR_SENSE_C_PIN    PC4
+#define DRV8323_CURR_SENSE_A_PIN    PB_0
+#define DRV8323_CURR_SENSE_B_PIN    PC_5
+#define DRV8323_CURR_SENSE_C_PIN    PC_4
 
 // CAN
 #define CAN2_TX_PIN                 PB13

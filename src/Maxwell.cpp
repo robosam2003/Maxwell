@@ -111,9 +111,9 @@ namespace Maxwell {
     }
 
     volatile void Maxwell::Update_A_callback() {
-        uint32_t cnt = instance->pwm_3x->TIM_A->getCount();
+        // instance->driver->current_sensors->read();  // this conversion only takes 250us
+        // uint32_t cnt = instance->pwm_3x->TIM_A->getCount();
         // if (cnt < instance->pwm_3x->MAX_COMPARE_VALUE) {
-        //
         // }
     }
 
@@ -231,12 +231,16 @@ namespace Maxwell {
         // Syncronise the timers with a master timer.
         LL_TIM_SetSlaveMode(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_SLAVEMODE_DISABLED);
         LL_TIM_SetTriggerOutput(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_TRGO_ENABLE);
+        LL_TIM_SetTriggerOutput(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_TRGO_UPDATE);
+
 
         // Configure the other two timers to get their input trigger from the master timer:
         for (auto timer : {pwm_3x->TIM_B, pwm_3x->TIM_C}) {
             LL_TIM_SetTriggerInput(timer->getHandle()->Instance, _getInternalSourceTrigger(pwm_3x->TIM_A, timer));
             LL_TIM_SetSlaveMode(timer->getHandle()->Instance, LL_TIM_SLAVEMODE_TRIGGER);
         }
+
+        // LL_TIM_SetTriggerOutput(pwm_3x->TIM_B->getHandle()->Instance, LL_TIM_TRGO_UPDATE);
 
         sync_pwm();
     }
@@ -413,7 +417,7 @@ namespace Maxwell {
         text += static_cast<String>(fmod(encoder->get_angle() * POLE_PAIRS_6374, 2*PI)); text += "/";
         // text += static_cast<String>(hall_sensor->electrical_velocity);
         // text += "/";
-        driver->current_sensors->read();
+        // driver->current_sensors->read();
         text += static_cast<String>(driver->current_sensors->get_current_a()); text += "/";
         text += static_cast<String>(driver->current_sensors->get_current_b()); text += "/";
         text += static_cast<String>(driver->current_sensors->get_current_c()); text += "/";
@@ -531,7 +535,7 @@ namespace Maxwell {
 
 
             // Get motor currents
-            driver->current_sensors->read();
+            // driver->current_sensors->read();
             PhaseCurrents phase_currents = {driver->current_sensors->get_current_a(),
                                             driver->current_sensors->get_current_b(),
                                             driver->current_sensors->get_current_c()};
@@ -593,7 +597,7 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
 
         float zero_electrical_angle = encoder->get_angle();
-
+        int i = 0;
         while (true) {
             String text = "";
             // Read pwm input and map as a voltage:
@@ -620,10 +624,29 @@ namespace Maxwell {
             text += static_cast<String>(v_b); text += "/";
             text += static_cast<String>(v_c); text += "/";
 
+            if (i%100==0) {
+                // uint32_t start = micros();
+                // driver->current_sensors->read();  // this conversion only takes 250us
+                double currents[3] = {driver->current_sensors->get_current_a(),
+                            driver->current_sensors->get_current_b(),
+                            driver->current_sensors->get_current_c()};
+                double average = (currents[0] + currents[1] + currents[2]) / 3;
+                double rel_currents[3] = {
+                    (currents[0]),
+                    (currents[1]),
+                    (currents[2])
+                };
+                // uint32_t duration = micros() - start;
+                // Serial.println(duration);
+                Serial.print(rel_currents[0]); Serial.print(" ");
+                Serial.print(rel_currents[1]); Serial.print(" ");
+                Serial.println(rel_currents[2]);
+            }
 
             // Set the phase voltages
             set_phase_voltages(v_a, v_b, v_c);
-            Serial.println(text);
+            // Serial.println(text);
+            i++;
         }
 
     }
@@ -665,7 +688,7 @@ namespace Maxwell {
             set_phase_voltages(U_a, U_b, U_c);
             // double* currents = driver->current_sensors->get_currents();
             if (i % 1500 == 0) {
-                driver->current_sensors->read();
+                // driver->current_sensors->read();
                 double currents[3] = {driver->current_sensors->get_current_a(),
                                         driver->current_sensors->get_current_b(),
                                         driver->current_sensors->get_current_c()};
