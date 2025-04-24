@@ -162,10 +162,6 @@ namespace Maxwell {
         pinMode(V_SENSE_C_PIN, INPUT);
         pinMode(V_SUPPLY_SENSE_PIN, INPUT);
 
-        pinMode(DRV8323_CURR_SENSE_A_PIN, INPUT);
-        pinMode(DRV8323_CURR_SENSE_B_PIN, INPUT);
-        pinMode(DRV8323_CURR_SENSE_C_PIN, INPUT);
-
         Serial.println("Maxwell setup complete");
     }
 
@@ -231,7 +227,7 @@ namespace Maxwell {
         // Syncronise the timers with a master timer.
         LL_TIM_SetSlaveMode(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_SLAVEMODE_DISABLED);
         LL_TIM_SetTriggerOutput(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_TRGO_ENABLE);
-        LL_TIM_SetTriggerOutput(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_TRGO_UPDATE);
+        LL_TIM_SetTriggerOutput(pwm_3x->TIM_B->getHandle()->Instance, LL_TIM_TRGO_UPDATE);
 
 
         // Configure the other two timers to get their input trigger from the master timer:
@@ -626,6 +622,7 @@ namespace Maxwell {
 
             if (i%100==0) {
                 // uint32_t start = micros();
+                // HAL_ADCEx_InjectedStart(driver->current_sensors->hadc1);
                 // driver->current_sensors->read();  // this conversion only takes 250us
                 double currents[3] = {driver->current_sensors->get_current_a(),
                             driver->current_sensors->get_current_b(),

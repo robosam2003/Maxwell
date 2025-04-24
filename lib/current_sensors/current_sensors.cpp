@@ -22,6 +22,7 @@ CurrentSensors::CurrentSensors(PinName pin_a, PinName pin_b, PinName pin_c, DRV8
     _filter_c = new RCFilter(cuttoff_freq);
 
     _csa_gain = gain;
+    hadc1 = new ADC_HandleTypeDef();
 
 
   // set pins
@@ -35,7 +36,8 @@ CurrentSensors::CurrentSensors(PinName pin_a, PinName pin_b, PinName pin_c, DRV8
 }
 
 void CurrentSensors::setup_injected_adc() {
-    hadc1 = new ADC_HandleTypeDef();
+    delay(1000);
+
 
     // Assuming all pins belong to the same ADC (they do)
     // Enable clocks
@@ -75,13 +77,13 @@ void CurrentSensors::setup_injected_adc() {
     sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES;
     sConfigInjected.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONVEDGE_RISING;
     sConfigInjected.AutoInjectedConv = DISABLE;
-    sConfigInjected.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJECCONV_T1_TRGO;
+    sConfigInjected.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJECCONV_T2_TRGO;
     sConfigInjected.InjectedDiscontinuousConvMode = DISABLE;
     sConfigInjected.InjectedOffset = 0;
 
     // first channel
     sConfigInjected.InjectedRank = ADC_INJECTED_RANK_1;
-    sConfigInjected.InjectedChannel = ADC_CHANNEL_4; // PB_0 - ADC1_IN8
+    sConfigInjected.InjectedChannel = ADC_CHANNEL_8; // PB_0 - ADC1_IN8
     if (HAL_ADCEx_InjectedConfigChannel(hadc1, &sConfigInjected) != HAL_OK){
         Serial.println("Error configuring ADC channel 1");
     }
@@ -99,9 +101,16 @@ void CurrentSensors::setup_injected_adc() {
     }
 
     // Start the injected conversion
-    if (HAL_ADCEx_InjectedStart(hadc1) != HAL_OK) {
+    int start_code = HAL_ADCEx_InjectedStart(hadc1);
+    if (start_code != HAL_OK) {
+      for (int i=0; i<10; i++) {
         Serial.println("Error starting injected conversion");
+        Serial.println(start_code);
+        delay(1000);
+      }
+
     }
+    delay(1000);
     Serial.println("SUCCESSFULLY SETUP INJECTED ADC");
 }
 
@@ -152,20 +161,20 @@ void CurrentSensors::read() {
 }
 
 double CurrentSensors::get_current_a() {
-  double v_a = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_1);
-  _current_a = _filter_a->update((3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a, micros());
+  double v_a = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_1) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // _current_a = _filter_a->update((3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a, micros());
   return v_a;
 }
 
 double CurrentSensors::get_current_b() {
-  double v_b = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_2);
-  _current_b = _filter_b->update((3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b, micros());
+  double v_b = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_2) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // _current_b = _filter_b->update((3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b, micros());
   return v_b;
 }
 
 double CurrentSensors::get_current_c() {
-  double v_c = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_3);
-  _current_c = _filter_c->update((3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c, micros());
+  double v_c = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_3) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // _current_c = _filter_c->update((3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c, micros());
   return v_c;
 }
 

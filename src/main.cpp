@@ -1,5 +1,5 @@
 
-#define TEST
+// #define TEST
 #ifdef TEST
 // Goal is to read the adc with dma
 #include "Arduino.h"
@@ -78,9 +78,9 @@ void setup_injected_adc() {
     ADC_InjectionConfTypeDef sConfigInjected;
     sConfigInjected.InjectedNbrOfConversion = 3;
     sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES;
-    sConfigInjected.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONVEDGE_RISING;
+    sConfigInjected.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONVEDGE_NONE;
     sConfigInjected.AutoInjectedConv = DISABLE;
-    sConfigInjected.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJECCONV_T1_TRGO;
+    sConfigInjected.ExternalTrigInjecConv = ADC_SOFTWARE_START;
     sConfigInjected.InjectedDiscontinuousConvMode = DISABLE;
     sConfigInjected.InjectedOffset = 0;
 
@@ -120,15 +120,15 @@ void setup() {
     delay(3000);
     Serial.begin(9600);
     Serial.println("Setup started");
-    timer_setup();
+    // timer_setup();
     setup_injected_adc();
 }
 
 
 void loop() {
-    // if (HAL_ADCEx_InjectedStart_IT(&hadc1) != HAL_OK) {
-    //     Serial.println("Error starting injected conversion");
-    // }
+    if (HAL_ADCEx_InjectedStart(hadc1) != HAL_OK) {
+        Serial.println("Error starting injected conversion");
+    }
     // Wait for the conversion to complete
 
     // Read the converted values
@@ -168,6 +168,7 @@ void pwm_callback() {
 void setup() {
     delay(1000);
     Serial.begin(921600);
+    Serial.println("Setup Start");
 
     maxwell.setup();
     maxwell.init_pwm_3x();
@@ -175,7 +176,7 @@ void setup() {
 
     pwm_input.set_callback(pwm_callback);
     maxwell.pwm_input = &pwm_input;
-    maxwell.driver->perform_current_sense_calibration();
+    // maxwell.driver->perform_current_sense_calibration();
     // maxwell.driver->current_sensors->calibrate_offsets();
     maxwell.driver->clear_fault();
 }
