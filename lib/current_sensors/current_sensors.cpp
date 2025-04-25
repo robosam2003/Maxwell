@@ -16,7 +16,7 @@ CurrentSensors::CurrentSensors(PinName pin_a, PinName pin_b, PinName pin_c, DRV8
     _offset_b = 0.0;
     _offset_c = 0.0;
 
-    double cuttoff_freq = 10;
+    double cuttoff_freq = 20;
     _filter_a = new RCFilter(cuttoff_freq);
     _filter_b = new RCFilter(cuttoff_freq);
     _filter_c = new RCFilter(cuttoff_freq);
@@ -64,7 +64,7 @@ void CurrentSensors::setup_injected_adc() {
 
     ADC_InjectionConfTypeDef sConfigInjected;
     sConfigInjected.InjectedNbrOfConversion = 3;
-    sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_56CYCLES;
+    sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_480CYCLES;
     sConfigInjected.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONVEDGE_RISING;
     sConfigInjected.AutoInjectedConv = DISABLE;
     sConfigInjected.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJECCONV_T1_TRGO;
@@ -78,13 +78,13 @@ void CurrentSensors::setup_injected_adc() {
         Serial.println("Error configuring ADC channel 1");
     }
     // second channel
-    sConfigInjected.InjectedRank = ADC_INJECTED_RANK_1;
+    sConfigInjected.InjectedRank = ADC_INJECTED_RANK_2;
     sConfigInjected.InjectedChannel = ADC_CHANNEL_15; // PC_5 - ADC1_IN15
     if (HAL_ADCEx_InjectedConfigChannel(hadc1, &sConfigInjected) != HAL_OK){
         Serial.println("Error configuring ADC channel 2");
     }
     // third channel
-    sConfigInjected.InjectedRank = ADC_INJECTED_RANK_2;
+    sConfigInjected.InjectedRank = ADC_INJECTED_RANK_3;
     sConfigInjected.InjectedChannel = ADC_CHANNEL_14; // PC_4 - ADC1_IN14
     if (HAL_ADCEx_InjectedConfigChannel(hadc1, &sConfigInjected) != HAL_OK){
         Serial.println("Error configuring ADC channel 3");
@@ -119,6 +119,7 @@ void CurrentSensors::calibrate_offsets() {
   _filter_b->prev_value = 0.0;
   _filter_c->prev_value = 0.0;
   for (int i = 0; i< num_samples; i++) {
+    read();
     // Let the value settle
     get_current_a();
     get_current_b();
@@ -126,6 +127,7 @@ void CurrentSensors::calibrate_offsets() {
     delay(1);
   }
   for (int i = 0; i < num_samples; i++) {
+    read();
     sum_a += get_current_a();
     sum_b += get_current_b();
     sum_c += get_current_c();
@@ -150,21 +152,21 @@ void CurrentSensors::read() {
   else {
     _current_a = (3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a;
     _current_b = (3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b;
-    _current_c = (3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a;
+    _current_c = (3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c;
   }
 }
 
 
 double CurrentSensors::get_current_a() {
-  return v_a;
+  return _current_a;
 }
 
 double CurrentSensors::get_current_b() {
-  return v_b;
+  return _current_b;
 }
 
 double CurrentSensors::get_current_c() {
-  return v_c;
+  return _current_c;
 }
 
 double* CurrentSensors::get_currents() {

@@ -667,20 +667,20 @@ namespace Maxwell {
 
 
 
+            if (i%10==0) {
+                PhaseCurrents phase_currents = {currents[0], currents[1], currents[2]};
+                alpha_beta_struct ab_vec = clarke_transform(phase_currents);
+                dq_struct dq_vec = park_transform(ab_vec);
 
-            PhaseCurrents phase_currents = {currents[0], currents[1], currents[2]};
-            alpha_beta_struct ab_vec = clarke_transform(phase_currents);
-            dq_struct dq_vec = park_transform(ab_vec);
-
-            phase_current_frame.values = {currents[0], currents[1], currents[2]};
-            rotor_position_frame.values = {theta};
-            alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
-            dq_frame.values = {dq_vec.d, dq_vec.q};
-            send_frame(rotor_position_frame);
-            send_frame(phase_current_frame);
-            send_frame(alpha_beta_frame);
-            send_frame(dq_frame);
-
+                phase_current_frame.values = {currents[0], currents[1], currents[2]};
+                rotor_position_frame.values = {theta};
+                alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
+                dq_frame.values = {dq_vec.d, dq_vec.q};
+                // send_frame(rotor_position_frame);
+                send_frame(phase_current_frame);
+                send_frame(alpha_beta_frame);
+                send_frame(dq_frame);
+            }
 
 
         }

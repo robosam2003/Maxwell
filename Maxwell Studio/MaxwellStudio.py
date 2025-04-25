@@ -20,7 +20,7 @@ import serial
 import time
 from dataclasses import dataclass
 
-BUFFER_SIZE = 2000
+BUFFER_SIZE = 500
 
 # List of Pens
 pens = [
@@ -86,7 +86,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
         self.update_plots_timer = QTimer()
         self.update_plots_timer.timeout.connect(self.update_plots)
-        self.update_plots_timer.start(10)
+        self.update_plots_timer.start(1)
 
     def combobox_changed(self, i):
         # Get the selected frame
