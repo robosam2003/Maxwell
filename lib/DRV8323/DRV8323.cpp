@@ -198,9 +198,15 @@ namespace DRV8323 {
         _csa_gain = gain;
         uint16_t data = read_reg(REGISTER::CSA_CONTROL);
         data = data & 0b11100111111; // Mask the CSA_GAIN bits
-        data = data | (gain << 5);   // Set the CSA_GAIN bits
+        data = data | (gain << 6);   // Set the CSA_GAIN bits
         write_reg(REGISTER::CSA_CONTROL, data);
         current_sensors->set_csa_gain(gain);
+    }
+
+    void DRV8323::enable_csa_fet(bool enable) {
+        uint16_t data = read_reg(REGISTER::CSA_CONTROL);
+        setBit(&data, 10, enable ? 1 : 0);  // Enable the CSA FET
+        write_reg(REGISTER::CSA_CONTROL, data);
     }
 
     void DRV8323::set_gate_drive_source_current(IDRIVE_P_CURRENT current) {
@@ -263,6 +269,8 @@ namespace DRV8323 {
         enable_GDF(false);
         set_current_gain(CSA_GAIN::GAIN_40_V_V);
         clear_fault();
+
+        // enable_csa_fet(true);
     }
 
     void DRV8323::enable_CPUV_Fault(bool enable) {

@@ -3,12 +3,14 @@
 //
 #include "RCFilter.h"
 
+#include "../../include/config.h"
+
 #ifndef PI
 #define PI 3.14159265358979323846
 #endif // PI
 
 RCFilter::RCFilter(double cutoff_freq) {
-    RC = 1 / (2 * PI * cutoff_freq);
+    RC = 1 / (_2PI * cutoff_freq);
     prev_value = 0;
     prev_update_time_us = 0;
 }

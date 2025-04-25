@@ -126,11 +126,11 @@ namespace Maxwell {
 
         driver->default_configuration();
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
-        driver->set_gate_drive_source_current(DRV8323::IDRIVE_P_CURRENT::IDRIVEP_10mA);
-        driver->set_gate_drive_sink_current(DRV8323::IDRIVE_N_CURRENT::IDRIVEN_20mA);
-        driver->set_peak_gate_drive_time(DRV8323::TDRIVE_TIME::TDRIVE_500ns);
+        driver->set_gate_drive_source_current(DRV8323::IDRIVE_P_CURRENT::IDRIVEP_1000mA);
+        driver->set_gate_drive_sink_current(DRV8323::IDRIVE_N_CURRENT::IDRIVEN_2000mA);
+        driver->set_peak_gate_drive_time(DRV8323::TDRIVE_TIME::TDRIVE_4000ns);
 
-        driver->set_dead_time(DRV8323::DEAD_TIMES::DEAD_TIME_50NS);
+        driver->set_dead_time(DRV8323::DEAD_TIMES::DEAD_TIME_400NS);
         driver->enable(true);
 
         // Tie the low side pins HIGH to avoid hi-z state - Only in PWM_3X mode
@@ -212,7 +212,7 @@ namespace Maxwell {
         // Syncronise the timers with a master timer.
         LL_TIM_SetSlaveMode(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_SLAVEMODE_DISABLED);
         LL_TIM_SetTriggerOutput(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_TRGO_ENABLE);
-        LL_TIM_SetTriggerOutput(pwm_3x->TIM_B->getHandle()->Instance, LL_TIM_TRGO_UPDATE);
+        LL_TIM_SetTriggerOutput(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_TRGO_UPDATE);
 
 
         // Configure the other two timers to get their input trigger from the master timer:
@@ -621,6 +621,9 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
+        pinMode(DRV8323_CURR_SENSE_A_PIN, INPUT_ANALOG); // PB_0 - ADC1_IN8
+        pinMode(DRV8323_CURR_SENSE_B_PIN, INPUT_ANALOG); // PC_5 - ADC1_IN15
+        pinMode(DRV8323_CURR_SENSE_C_PIN, INPUT_ANALOG); // PC_4 - ADC1_IN14
 
         int i = 0;
         while (true) {
@@ -637,33 +640,49 @@ namespace Maxwell {
             float U_alpha = U_q*_sin(electrical_theta);
             float U_beta  = U_q*_cos(electrical_theta);
 
+
             // Calculate the phase voltages
             float v_a = U_alpha;
             float v_b = (-U_alpha + M_SQRT3*U_beta) / 2;
             float v_c = (-U_alpha - M_SQRT3*U_beta) / 2;
-
-            if (i%10==0) {
-                // uint32_t start = micros();
-                float currents[3] = {driver->current_sensors->get_current_a(),
-                            driver->current_sensors->get_current_b(),
-                            driver->current_sensors->get_current_c()};
-                double average = (currents[0] + currents[1] + currents[2]) / 3;
-                float rel_currents[3] = {
-                    (currents[0]),
-                    (currents[1]),
-                    (currents[2])
-                };
-                phase_current_frame.values = {rel_currents[0], rel_currents[1], rel_currents[2]};
-                send_frame(phase_current_frame);
-
-                rotor_position_frame.values = {theta};
-                send_frame(rotor_position_frame);
-            }
-
             // Set the phase voltages
             set_phase_voltages(v_a, v_b, v_c);
             // Serial.println(text);
             i++;
+
+            // uint32_t start = micros();
+            driver->current_sensors->read();
+            float currents[3] = {static_cast<float>(driver->current_sensors->get_current_a()),
+                                  static_cast<float>(driver->current_sensors->get_current_b()),
+                                  static_cast<float>(driver->current_sensors->get_current_c())};
+            // uint32_t a = analogRead(DRV8323_CURR_SENSE_A_PIN);
+            // uint32_t b = analogRead(DRV8323_CURR_SENSE_B_PIN);
+            // uint32_t c = analogRead(DRV8323_CURR_SENSE_C_PIN);
+
+            // float currents [3] = {
+            //     static_cast<float>(a),
+            //     static_cast<float>(b),
+            //     static_cast<float>(c)
+            // };
+
+
+
+
+            PhaseCurrents phase_currents = {currents[0], currents[1], currents[2]};
+            alpha_beta_struct ab_vec = clarke_transform(phase_currents);
+            dq_struct dq_vec = park_transform(ab_vec);
+
+            phase_current_frame.values = {currents[0], currents[1], currents[2]};
+            rotor_position_frame.values = {theta};
+            alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
+            dq_frame.values = {dq_vec.d, dq_vec.q};
+            send_frame(rotor_position_frame);
+            send_frame(phase_current_frame);
+            send_frame(alpha_beta_frame);
+            send_frame(dq_frame);
+
+
+
         }
 
     }
@@ -723,7 +742,7 @@ namespace Maxwell {
 
     alpha_beta_struct Maxwell::clarke_transform(PhaseCurrents currents) { // currents to alpha-beta
         float I_alpha = currents.current_a;
-        float I_beta = (currents.current_b - currents.current_c) / sqrt(3);
+        float I_beta = (currents.current_a  + 2*currents.current_b) / _SQRT3;
         alpha_beta_struct ab = {I_alpha, I_beta};
         curr_struct->alpha_beta = ab;
         return ab;
@@ -732,8 +751,8 @@ namespace Maxwell {
     dq_struct Maxwell::park_transform(alpha_beta_struct ab_vec) { // alpha-beta to dq
         // the park transform
         encoder->update();
-        float theta = encoder->get_angle(); // Assuming we're aligned with the encoder!
-        float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
+        float electrical_theta = encoder->get_angle()  * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
+        // float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
         float d = ab_vec.alpha * cos(electrical_theta)  + ab_vec.beta * sin(electrical_theta);
         float q = -ab_vec.alpha * sin(electrical_theta) + ab_vec.beta * cos(electrical_theta);
         dq_struct dq = {d, q};

@@ -59,7 +59,7 @@ void setup() {
     maxwell.driver->current_sensors->calibrate_offsets();
     maxwell.driver->clear_fault();
 
-    maxwell.foc_init_sequence();
+    // maxwell.foc_init_sequence();
 }
 
 

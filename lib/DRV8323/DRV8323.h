@@ -69,6 +69,8 @@ public:
 
     void set_current_gain(CSA_GAIN gain);
 
+    void enable_csa_fet(bool enable);
+
     void set_gate_drive_source_current(IDRIVE_P_CURRENT current);
 
     void set_gate_drive_sink_current(IDRIVE_N_CURRENT current);

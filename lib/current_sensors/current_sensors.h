@@ -30,11 +30,13 @@ private:
 
 
 public:
-
+	double v_a;
+	double v_b;
+	double v_c;
     double _current_a;
     double _current_b;
     double _current_c;
-	bool filtered = true;
+	bool filtered = false;
 
     explicit CurrentSensors(PinName pin_a,
                           PinName pin_b,
@@ -46,6 +48,9 @@ public:
     void set_csa_gain(DRV8323::CSA_GAIN gain);
 
     void calibrate_offsets();
+
+	void read();
+
     double get_current_a();
     double get_current_b();
     double get_current_c();
