@@ -78,7 +78,12 @@ namespace Maxwell {
 
 
     class Maxwell {
-    private:
+    public:
+
+        float_frame command_voltage_frame = {
+            .name = "Command Voltage",
+            .values = {0.0, 0.0, 0.0}
+        };
         float_frame phase_current_frame = {
             .name = "Phase Current",
             .values = {0.0, 0.0, 0.0}
@@ -91,6 +96,9 @@ namespace Maxwell {
             .name = "Rotor Velocity",
             .values = {0.0}
         };
+        // float_frame
+        // float_frame
+
         float_frame alpha_beta_frame = {
             .name = "Alpha-Beta",
             .values = {0.0, 0.0}
@@ -110,7 +118,6 @@ namespace Maxwell {
 
 
 
-    public:
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
         AS5047P::AS5047P* encoder;
@@ -120,27 +127,16 @@ namespace Maxwell {
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 3;   // V
+        float max_voltage = 2;   // V
         float max_current = 1;   // A
         float align_max_voltage = 1.5;
-        float offset = 0.2; // V
+        float offset = 0.1; // V
 
         static Maxwell* instance;
-
-
-
-        volatile static void Compare_A_callback();
-        volatile static void Compare_B_callback();
-        volatile static void Compare_C_callback();
-        volatile static void Update_A_callback();
-        volatile static void Update_B_callback();
-        volatile static void Update_C_callback();
-
 
         Maxwell(); // Constructor
 
         void setup();
-
 
         void init_pwm_3x();
 
@@ -165,6 +161,8 @@ namespace Maxwell {
         void sinusoidal_position_control();
 
         void voltage_torque_control();
+
+        void voltage_position_control();
 
         void foc_current_torque_control();
 

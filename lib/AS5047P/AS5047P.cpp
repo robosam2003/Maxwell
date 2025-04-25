@@ -70,19 +70,19 @@ namespace AS5047P {
             angle = read_reg(REGISTER::ANGLEUNCOMP);
         }
         angle = angle & 0b0011111111111111; // Mask the 2 MSB bits
-        float angle_val = (static_cast<float>(angle) / 16384.0) * 2 * PI;
+        float angle_val = (static_cast<float>(angle) / 16384.0) * _2PI;
         float d_angle = angle_val - prev_rel_angle;
-        prev_rel_angle = angle_val;
-        if (abs(d_angle) > 0.8f*_2PI) { // This relies on the update() method being called frequently enough
+        if (abs(d_angle) > 0.5f*_2PI) { // This relies on the update() method being called frequently enough
             full_rotations += (d_angle > 0) ? -1 : 1;
         }
-        absolute_angle = (static_cast<float>(full_rotations) * _2PI) + angle_val;
+        prev_rel_angle = angle_val;
+        absolute_angle = (static_cast<float>(full_rotations) * _2PI) + prev_rel_angle;
 
         // Velocity calculation
         uint32_t current_time = micros();
-        // if (current_time - prev_time_us < 100) { // 100 microseconds
-        //     return;
-        // }
+        if (current_time - prev_time_us < 100) { // 100 microseconds
+            return;
+        }
         velocity = (absolute_angle - prev_absolute_angle) / ((current_time - prev_time_us) * 1e-6f); // rad/s
         prev_time_us = current_time;
     }

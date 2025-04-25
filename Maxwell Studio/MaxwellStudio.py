@@ -38,7 +38,7 @@ pens = [
 @dataclass
 class Frame:
     name: str
-    sample_queue: deque[int]
+    sample_queue: deque[float]
     data_names: list[str]
     data_queues: list[deque[float]]
 
@@ -163,13 +163,13 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
                     for frame in self.frames:
                         if frame.name == name:
                             # Increment sample number
-                            frame.sample_queue.append(frame.sample_queue[-1] + 1)
+                            frame.sample_queue.append(time.time() - self.start_time)
                             for i, d in enumerate(data):
                                 frame.data_queues[i].append(d)
                             break
                     else: # New frame
                         new_frame = Frame(name, [deque(maxlen=BUFFER_SIZE) for _ in range(len(data))])
-                        new_frame.sample_queue.append(1)
+                        new_frame.sample_queue.append(time.time() - self.start_time)
                         for i, d in enumerate(data):
                             new_frame.data_queues[i].append(d)
                         self.frames.append(new_frame)

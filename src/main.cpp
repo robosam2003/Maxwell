@@ -67,8 +67,20 @@ void setup() {
 void loop() {
     // maxwell.sinusoidal_position_control();
     // maxwell.foc_position_control();
-    maxwell.voltage_torque_control();
+    // maxwell.voltage_torque_control();
 
+
+    maxwell.voltage_position_control();
+
+
+
+
+
+    // maxwell.encoder->update();
+    // maxwell.rotor_position_frame.values = {maxwell.encoder->get_angle()};
+    // send_frame(maxwell.rotor_position_frame);
+    // Serial.println(maxwell.encoder->get_angle());
+    // delay(10);
 
     // maxwell.foc_current_torque_control();
 

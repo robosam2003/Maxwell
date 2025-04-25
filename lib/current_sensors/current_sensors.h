@@ -14,10 +14,10 @@
 class CurrentSensors {
 private:
     double R_SENSE = 400e-6;
-
-    PinName _pin_a;
-    PinName _pin_b;
-    PinName _pin_c;
+	float ANOMALY_THRESHOLD = 300;
+    uint32_t _pin_a;
+    uint32_t _pin_b;
+    uint32_t _pin_c;
     double _offset_a;  // in AMPS
     double _offset_b;
     double _offset_c;
@@ -36,11 +36,11 @@ public:
     double _current_a;
     double _current_b;
     double _current_c;
-	bool filtered = true;
+	bool filtered = false;
 
-    explicit CurrentSensors(PinName pin_a,
-                          PinName pin_b,
-                          PinName pin_c,
+    explicit CurrentSensors(uint32_t pin_a,
+                          uint32_t pin_b,
+                          uint32_t pin_c,
                           DRV8323::CSA_GAIN gain);
 
     void setup_injected_adc();

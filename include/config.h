@@ -32,7 +32,7 @@
 
 struct float_frame {
   String name;
-  std::vector<float> values;
+  std::vector<double> values;
 };
 
 struct string_frame {

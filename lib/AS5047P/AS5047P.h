@@ -11,7 +11,8 @@
 namespace AS5047P {
 
     class AS5047P {
-    private:
+    public:
+
         byte _CS;
         byte READ_BYTE = 0b01000000;
         byte WRITE_BYTE = 0b00000000;
@@ -26,7 +27,6 @@ namespace AS5047P {
         float velocity = 0.0; // Angular velocity (radians/s)
         bool comp = true;
 
-    public:
         AS5047P(byte CS, SPIClass& spi, uint32_t spiFreq);
 
         uint16_t read_reg(REGISTER regAddress);  // SPI read
