@@ -25,53 +25,8 @@
         <string>Tab 1</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout_3">
-        <item row="1" column="1">
-         <widget class="PlotWidget" name="current_plots" native="true">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize">
-           <size>
-            <width>0</width>
-            <height>0</height>
-           </size>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="PlotWidget" name="voltage_plots" native="true">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="1" colspan="2">
-         <widget class="QLabel" name="fault_codes_label">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="font">
-           <font>
-            <pointsize>13</pointsize>
-            <weight>75</weight>
-            <bold>true</bold>
-           </font>
-          </property>
-          <property name="text">
-           <string>Fault Codes:
-
-</string>
-          </property>
-         </widget>
+        <item row="4" column="1">
+         <widget class="QComboBox" name="plot3_combobox"/>
         </item>
         <item row="0" column="0" colspan="4">
          <widget class="QFrame" name="titleFrame">
@@ -173,8 +128,11 @@
           </layout>
          </widget>
         </item>
-        <item row="1" column="2">
-         <widget class="PlotWidget" name="dq_currents_plot" native="true">
+        <item row="2" column="2">
+         <widget class="QComboBox" name="plot2_combobox"/>
+        </item>
+        <item row="3" column="2">
+         <widget class="PlotWidget" name="plot4" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
             <horstretch>0</horstretch>
@@ -183,8 +141,21 @@
           </property>
          </widget>
         </item>
-        <item row="2" column="2">
-         <widget class="PlotWidget" name="rotor_angle_plot" native="true">
+        <item row="4" column="2">
+         <widget class="QComboBox" name="plot4_combobox"/>
+        </item>
+        <item row="3" column="1">
+         <widget class="PlotWidget" name="plot3" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="PlotWidget" name="plot2" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
             <horstretch>0</horstretch>
@@ -192,6 +163,25 @@
            </sizepolicy>
           </property>
          </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="PlotWidget" name="plot1" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QComboBox" name="plot1_combobox"/>
         </item>
        </layout>
       </widget>

@@ -28,6 +28,55 @@
 #define _PI_6 0.52359877559f
 #define _RPM_TO_RADS 0.10471975512f
 
+
+
+struct float_frame {
+  String name;
+  std::vector<float> values;
+};
+
+struct string_frame {
+  String name;
+  std::vector<String> values;
+};
+
+inline int calcuate_checksum(String text) {
+  // calculate checksum
+  int checksum = 0;
+  for (int i = 0; i < text.length(); i++) {
+    checksum += text[i]; // add the ASCII value of each character
+  }
+  checksum = checksum % 256;
+  return checksum;
+}
+
+inline void send_frame(float_frame& frame) {
+  String frame_string = "";
+  frame_string += frame.name; frame_string += "/";
+  for (auto value : frame.values) {
+    frame_string += String(value); frame_string += "/";
+  }
+
+  int checksum = calcuate_checksum(frame_string);
+  frame_string += "|";
+  frame_string += String(checksum);
+  Serial.println(frame_string);
+}
+
+inline void send_frame(string_frame& frame) {
+  String frame_string = "";
+  frame_string += frame.name; frame_string += "/";
+  for (auto value : frame.values) {
+    frame_string += value; frame_string += "/";
+  }
+
+  int checksum = calcuate_checksum(frame_string);
+  frame_string += "|";
+  frame_string += String(checksum);
+  Serial.println(frame_string);
+}
+
+
 // // function approximating the sine calculation by using fixed size array
 // // uses a 65 element lookup table and interpolation
 // // thanks to @dekutree for his work on optimizing this

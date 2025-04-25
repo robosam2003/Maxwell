@@ -80,6 +80,9 @@ namespace AS5047P {
 
         // Velocity calculation
         uint32_t current_time = micros();
+        // if (current_time - prev_time_us < 100) { // 100 microseconds
+        //     return;
+        // }
         velocity = (absolute_angle - prev_absolute_angle) / ((current_time - prev_time_us) * 1e-6f); // rad/s
         prev_time_us = current_time;
     }

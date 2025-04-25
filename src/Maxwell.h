@@ -78,6 +78,38 @@ namespace Maxwell {
 
 
     class Maxwell {
+    private:
+        float_frame phase_current_frame = {
+            .name = "Phase Current",
+            .values = {0.0, 0.0, 0.0}
+        };
+        float_frame rotor_position_frame = {
+            .name = "Rotor Position",
+            .values = {0.0}
+        };
+        float_frame rotor_velocity_frame = {
+            .name = "Rotor Velocity",
+            .values = {0.0}
+        };
+        float_frame alpha_beta_frame = {
+            .name = "Alpha-Beta",
+            .values = {0.0, 0.0}
+        };
+        float_frame dq_frame = {
+            .name = "dq",
+            .values = {0.0, 0.0}
+        };
+        float_frame command_dq_frame = {
+            .name = "command dq",
+            .values = {0.0, 0.0}
+        };
+        float_frame command_alpha_beta_frame = {
+            .name = "command alpha-beta",
+            .values = {0.0, 0.0}
+        };
+
+
+
     public:
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
@@ -88,7 +120,7 @@ namespace Maxwell {
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 1;   // V
+        float max_voltage = 4;   // V
         float max_current = 1;   // A
         float align_max_voltage = 1.5;
         float offset = 0.5; // V

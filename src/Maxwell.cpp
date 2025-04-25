@@ -446,7 +446,8 @@ namespace Maxwell {
             theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
-                Serial.println(encoder->get_angle());
+                rotor_position_frame.values = {encoder->get_angle()};
+                send_frame(rotor_position_frame);
             }
             // Generate three sin waves, offset by 120 degrees
             float U_a = _sin(theta)                * align_max_voltage/2;
@@ -461,7 +462,8 @@ namespace Maxwell {
             theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
-                Serial.println(encoder->get_angle());
+                rotor_position_frame.values = {encoder->get_angle()};
+                send_frame(rotor_position_frame);
             }
             // Generate three sin waves, offset by 120 degrees
             float U_a = _sin(theta)                * align_max_voltage/2;
@@ -622,56 +624,40 @@ namespace Maxwell {
 
         int i = 0;
         while (true) {
-            String text = "";
             // Read pwm input and map as a voltage:
             float U_q = pwm_input->read_percentage() / 100.0 * max_voltage;
-            text += static_cast<String>(U_q); text += "/";
             // Voltage Limit
             // U_q = constrain(U_q, 0, max_voltage);
             // Read the encoder angle
             encoder->update();
             float theta = encoder->get_angle();
-            text += static_cast<String>(theta); text += "/";
             float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
 
             // Calculate the required voltages
             float U_alpha = U_q*_sin(electrical_theta);
             float U_beta  = U_q*_cos(electrical_theta);
-            text += static_cast<String>(U_alpha); text += "/";
-            text += static_cast<String>(U_beta); text += "/";
 
             // Calculate the phase voltages
             float v_a = U_alpha;
             float v_b = (-U_alpha + M_SQRT3*U_beta) / 2;
             float v_c = (-U_alpha - M_SQRT3*U_beta) / 2;
-            text += static_cast<String>(v_a); text += "/";
-            text += static_cast<String>(v_b); text += "/";
-            text += static_cast<String>(v_c); text += "/";
 
-            if (i%5==0) {
+            if (i%10==0) {
                 // uint32_t start = micros();
-                double currents[3] = {driver->current_sensors->get_current_a(),
+                float currents[3] = {driver->current_sensors->get_current_a(),
                             driver->current_sensors->get_current_b(),
                             driver->current_sensors->get_current_c()};
                 double average = (currents[0] + currents[1] + currents[2]) / 3;
-                double rel_currents[3] = {
+                float rel_currents[3] = {
                     (currents[0]),
                     (currents[1]),
                     (currents[2])
                 };
-                // double rel_currents[3] = {
-                //     (currents[0] - currents[1]),
-                //     (currents[1] - currents[2]),
-                //     (currents[2] - currents[0])
-                // };
+                phase_current_frame.values = {rel_currents[0], rel_currents[1], rel_currents[2]};
+                send_frame(phase_current_frame);
 
-                // uint32_t duration = micros() - start;
-                // Serial.println(duration);
-                Serial.print(rel_currents[0]); Serial.print(" ");
-                Serial.print(rel_currents[1]); Serial.print(" ");
-                Serial.println(rel_currents[2]);
-                // Serial.println(theta);
-                // Serial.println(encoder->get_velocity());
+                rotor_position_frame.values = {theta};
+                send_frame(rotor_position_frame);
             }
 
             // Set the phase voltages
@@ -733,8 +719,6 @@ namespace Maxwell {
             Serial.print(command_currents.current_b); Serial.print(" ");
             Serial.println(command_currents.current_c);
         }
-
-
     }
 
     alpha_beta_struct Maxwell::clarke_transform(PhaseCurrents currents) { // currents to alpha-beta
