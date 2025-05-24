@@ -60,7 +60,7 @@ namespace AS5047P {
     }
 
     void AS5047P::update() {
-        float prev_absolute_angle = absolute_angle; // Store the angle from previous updat
+        float prev_absolute_angle = absolute_angle; // Store the angle from previous update
 
         uint16_t angle = 0;
         if (comp) {
@@ -80,16 +80,16 @@ namespace AS5047P {
 
         // Velocity calculation
         uint32_t current_time = micros();
-        if (current_time - prev_time_us < 100) { // 100 microseconds
-            return;
-        }
+        // if (current_time - prev_time_us < 100) { // 100 microseconds
+        //     return;
+        // }
         velocity = (absolute_angle - prev_absolute_angle) / ((current_time - prev_time_us) * 1e-6f); // rad/s
         prev_time_us = current_time;
     }
 
     float AS5047P::get_angle() {
         // update();
-        if (_direction == CW) {
+        if (_direction == CCW) {
             return -absolute_angle;
         }
         return absolute_angle;
@@ -100,12 +100,10 @@ namespace AS5047P {
         return velocity;
     }
 
-
     uint16_t AS5047P::get_mag_strength() {
         uint16_t mag = read_reg(REGISTER::MAG);
         mag = mag & 0b0011111111111111; // Mask the 2 MSB bits
         return mag;
-
     }
 
     void AS5047P::set_direction(DIRECTION direction) {

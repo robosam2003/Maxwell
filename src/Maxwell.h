@@ -31,19 +31,19 @@ namespace Maxwell {
     };
 
     struct alpha_beta_struct {
-        float alpha;
-        float beta;
+        double alpha;
+        double beta;
     };
 
     struct dq_struct {
-        float d;
-        float q;
+        double d;
+        double q;
     };
 
     struct PhaseCurrents {
-        float current_a;
-        float current_b;
-        float current_c;
+        double current_a;
+        double current_b;
+        double current_c;
     };
 
     struct Currents {
@@ -127,8 +127,8 @@ namespace Maxwell {
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 2;   // V
-        float max_current = 1;   // A
+        float max_voltage = 1.5;   // V
+        float max_current = 2;   // A
         float align_max_voltage = 1.5;
         float offset = 0.1; // V
 

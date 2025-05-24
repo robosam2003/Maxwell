@@ -48,7 +48,9 @@ void pwm_callback() {
 
 void setup() {
     Serial.begin(921600);
-    // Serial.println("Setup Start");
+
+    // pinMode(GREEN_LED_PIN, OUTPUT);
+    Serial.println("Setup Start");
 
     maxwell.setup();
     maxwell.init_pwm_3x();
@@ -67,10 +69,23 @@ void setup() {
 void loop() {
     // maxwell.sinusoidal_position_control();
     // maxwell.foc_position_control();
+
+
+
     // maxwell.voltage_torque_control();
 
+    maxwell.foc_current_torque_control();
 
-    maxwell.voltage_position_control();
+
+    // Blink
+    // digitalWrite(GREEN_LED_PIN, HIGH);
+    // delay(100);
+    // digitalWrite(GREEN_LED_PIN, LOW);
+    // delay(100);
+
+    // Serial.println(maxwell.driver->get_fault_status_1_string());
+
+    // maxwell.voltage_position_control();
 
 
 

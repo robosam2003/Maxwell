@@ -13,7 +13,7 @@
 
 class CurrentSensors {
 private:
-    double R_SENSE = 400e-6;
+    double R_SENSE = 0.004;
 	float ANOMALY_THRESHOLD = 300;
     uint32_t _pin_a;
     uint32_t _pin_b;
@@ -36,7 +36,8 @@ public:
     double _current_a;
     double _current_b;
     double _current_c;
-	bool filtered = false;
+	bool filtered = true;
+	bool inverted = true;
 
     explicit CurrentSensors(uint32_t pin_a,
                           uint32_t pin_b,
