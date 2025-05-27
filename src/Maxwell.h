@@ -127,8 +127,8 @@ namespace Maxwell {
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 1.5;   // V
-        float max_current = 2;   // A
+        float max_voltage = 2;   // V
+        float max_current = 5;   // A
         float align_max_voltage = 1.5;
         float offset = 0.1; // V
 
@@ -150,13 +150,11 @@ namespace Maxwell {
 
         void set_phase_voltages(float Va, float Vb, float Vc);
 
+        void set_phase_voltages(const dq_struct &command_dq);
+
         void all_off();
 
-        void state_feedback();
-
         void foc_init_sequence();
-
-        void foc_position_control();
 
         void sinusoidal_position_control();
 
@@ -164,15 +162,17 @@ namespace Maxwell {
 
         void voltage_position_control();
 
+        void dc_current_torque_control();
+
         void foc_current_torque_control();
 
 
 
         alpha_beta_struct clarke_transform(PhaseCurrents currents);  // Currents to alpha-beta
 
-        dq_struct park_transform(alpha_beta_struct ab_vec);  // Alpha-beta to dq
+        dq_struct park_transform(alpha_beta_struct ab_vec, float theta);  // Alpha-beta to dq
 
-        alpha_beta_struct reverse_park_transform(dq_struct dq_vec);  // dq to alpha-beta
+        alpha_beta_struct reverse_park_transform(dq_struct dq_vec, float theta);  // dq to alpha-beta
 
         PhaseCurrents reverse_clarke_transform(alpha_beta_struct ab_vec);   // alpha-beta to currents
 

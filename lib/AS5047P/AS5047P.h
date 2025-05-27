@@ -23,6 +23,8 @@ namespace AS5047P {
         long full_rotations = 0; // Number of full rotations
         float absolute_angle = 0.0; // Absolute angle factoring in full rotations (radians)
 
+        float offset = 0.0; // Offset angle (radians)
+
         uint32_t prev_time_us = 0; // Timestamp of the previous angle reading
         float velocity = 0.0; // Angular velocity (radians/s)
         bool comp = true;
@@ -39,6 +41,7 @@ namespace AS5047P {
 
         float get_velocity();
 
+        float set_offset(float angle);
 
         uint16_t get_mag_strength();
 

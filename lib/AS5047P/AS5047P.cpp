@@ -22,6 +22,11 @@ namespace AS5047P {
         digitalWrite(_CS, HIGH);
         // Begin the SPI bus.
         _spi.begin();
+
+        // update();
+        // float _offset = get_angle(); // Set the offset to the current angle
+        // set_offset(_offset);
+
     }
 
     uint16_t AS5047P::read_reg(REGISTER regAddress) {
@@ -90,14 +95,18 @@ namespace AS5047P {
     float AS5047P::get_angle() {
         // update();
         if (_direction == CCW) {
-            return -absolute_angle;
+            return -absolute_angle + offset; // Return the absolute angle in radians, adjusted for direction and offset
         }
-        return absolute_angle;
+        return absolute_angle + offset; // Return the absolute angle in radians, adjusted for direction and offset
     }
 
     float AS5047P::get_velocity() {
         // update();
         return velocity;
+    }
+
+    float AS5047P::set_offset(float angle) {
+        offset = angle;
     }
 
     uint16_t AS5047P::get_mag_strength() {

@@ -113,6 +113,11 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
     @Slot()
     def reset(self):
+        for frame in self.frames:
+            frame.sample_queue.clear()
+            for data_queue in frame.data_queues:
+                data_queue.clear()
+
         self.frames = []
         self.plots = [self.plot1, self.plot2, self.plot3, self.plot4]
         self.comboboxes = [self.plot1_combobox, self.plot2_combobox, self.plot3_combobox, self.plot4_combobox]
@@ -125,6 +130,8 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         # Connect comboboxes to the function
         for i, combobox in enumerate(self.comboboxes):
             combobox.currentIndexChanged.connect(lambda x, index=i: self.combobox_changed(index))
+
+        # clear buffers
 
         self.start_time = time.time()
 

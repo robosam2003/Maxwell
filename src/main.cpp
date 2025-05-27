@@ -73,7 +73,7 @@ void loop() {
 
 
     // maxwell.voltage_torque_control();
-
+    // maxwell.dc_current_torque_control();
     maxwell.foc_current_torque_control();
 
 

@@ -154,9 +154,9 @@ void CurrentSensors::read() {
   // _current_a = v_a;
   // _current_b = v_b;
   // _current_c = v_c;
-  float a_calc = (3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_a;
-  float b_calc = (3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_b;
-  float c_calc = (3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) - _offset_c;
+  float a_calc = (3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) + ((inverted) ? _offset_a : -_offset_a);
+  float b_calc = (3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) + ((inverted) ? _offset_b : -_offset_b);
+  float c_calc = (3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) + ((inverted) ? _offset_c : -_offset_c);
 
   // Invert things
   (inverted) ? (a_calc *= -1, b_calc *= -1, c_calc *= -1) : 0;

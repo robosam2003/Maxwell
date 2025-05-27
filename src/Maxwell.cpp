@@ -299,12 +299,12 @@ namespace Maxwell {
     }
 
     void Maxwell::set_pwm(uint32_t Ua, uint32_t Ub, uint32_t Uc, uint32_t resolution) {
-        constrain(Ua, 0.0, pwm_3x->MAX_COMPARE_VALUE);
-        constrain(Ub, 0.0, pwm_3x->MAX_COMPARE_VALUE);
-        constrain(Uc, 0.0, pwm_3x->MAX_COMPARE_VALUE);
-        (Ua < 2.0)? Ua = 0 : Ua;
-        (Ub < 2.0)? Ub = 0 : Ub;
-        (Uc < 2.0)? Uc = 0 : Uc;
+        Ua = constrain(Ua, 0.0, pwm_3x->MAX_COMPARE_VALUE);
+        Ub = constrain(Ub, 0.0, pwm_3x->MAX_COMPARE_VALUE);
+        Uc = constrain(Uc, 0.0, pwm_3x->MAX_COMPARE_VALUE);
+        Ua = (Ua < 2.0)? 0 : Ua;
+        Ub = (Ub < 2.0)? 0 : Ub;
+        Uc = (Uc < 2.0)? 0 : Uc;
         pwm_3x->TIM_A->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_B->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_C->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
@@ -329,45 +329,17 @@ namespace Maxwell {
             pwm_3x->RESOLUTION);
     }
 
-    void Maxwell::all_off() {
-        set_pwm(0, 0, 0, pwm_3x->RESOLUTION);
+    void Maxwell::set_phase_voltages(const dq_struct &command_dq) {
+        encoder->update();
+        alpha_beta_struct command_ab = reverse_park_transform(command_dq, encoder->get_angle());
+        PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
+        set_phase_voltages(command_voltages.current_a,
+                            command_voltages.current_b,
+                            command_voltages.current_c);
     }
 
-    void Maxwell::state_feedback() {
-        String text = "";
-        // text += static_cast<String>(hall_sensor->hall_code); text += "/";
-        text += static_cast<String>(fmod(encoder->get_angle() * POLE_PAIRS_6374, 2*PI)); text += "/";
-        // text += static_cast<String>(hall_sensor->electrical_velocity);
-        // text += "/";
-        // driver->current_sensors->read();
-        text += static_cast<String>(driver->current_sensors->get_current_a()); text += "/";
-        text += static_cast<String>(driver->current_sensors->get_current_b()); text += "/";
-        text += static_cast<String>(driver->current_sensors->get_current_c()); text += "/";
-        text += static_cast<String>(curr_struct->dq.d); text += "/";
-        text += static_cast<String>(curr_struct->dq.q); text += "/";
-        text += static_cast<String>(curr_struct->alpha_beta.alpha); text += "/";
-        text += static_cast<String>(curr_struct->alpha_beta.beta); text += "/";
-        text += static_cast<String>(pwm_input->read_percentage()); text += "/";
-        double voltages[4] = {analogRead(V_SENSE_A_PIN) * SENSE_CONVERSION_FACTOR,
-                             analogRead(V_SENSE_B_PIN) * SENSE_CONVERSION_FACTOR,
-                             analogRead(V_SENSE_C_PIN) * SENSE_CONVERSION_FACTOR,
-                                analogRead(V_SUPPLY_SENSE_PIN) * SENSE_CONVERSION_FACTOR};
-        text += static_cast<String>(voltages[0]); text += "/";
-        text += static_cast<String>(voltages[1]); text += "/";
-        text += static_cast<String>(voltages[2]); text += "/";
-        text += static_cast<String>(voltages[3]); text += "/";
-
-        text += static_cast<String>(driver->get_fault_status_1_string()); text += "/";
-        text += static_cast<String>(driver->get_fault_status_2_string()); text += "/";
-
-        // calculate checksum
-        int checksum = 0;
-        for (int i = 0; i < text.length(); i++) {
-            checksum += text[i]; // add the ASCII value of each character
-        }
-        checksum = checksum % 256;
-        text += static_cast<String>(checksum);
-        Serial.println(text);
+    void Maxwell::all_off() {
+        set_pwm(0, 0, 0, pwm_3x->RESOLUTION);
     }
 
     void Maxwell::foc_init_sequence() {
@@ -449,8 +421,9 @@ namespace Maxwell {
         //     send_frame(dq_frame);
         //     delay(5);
         // }
-
-
+        dq_struct align_dq = {2, 0};
+        set_phase_voltages(align_dq);
+        delay(500);
 
         set_phase_voltages(0, 0, 0);
     }
@@ -553,9 +526,11 @@ namespace Maxwell {
                 PhaseCurrents phase_currents = {static_cast<float>(currents[0]),
                                                 static_cast<float>(currents[1]),
                                                 static_cast<float>(currents[2])};
+                encoder->update();
+                float theta = encoder->get_angle();
 
                 alpha_beta_struct ab_vec = clarke_transform(phase_currents);
-                dq_struct dq_vec = park_transform(ab_vec);
+                dq_struct dq_vec = park_transform(ab_vec, theta);
                 command_voltage_frame.values = {v_a, v_b, v_c};
 
                 phase_current_frame.values = {currents[0], currents[1], currents[2]};
@@ -650,7 +625,7 @@ namespace Maxwell {
                                                 static_cast<float>(currents[2])};
 
                 alpha_beta_struct ab_vec = clarke_transform(phase_currents);
-                dq_struct dq_vec = park_transform(ab_vec);
+                dq_struct dq_vec = park_transform(ab_vec, rotor_theta);
                 command_voltage_frame.values = {v_a, v_b, v_c};
 
                 phase_current_frame.values = {currents[0], currents[1], currents[2]};
@@ -678,7 +653,7 @@ namespace Maxwell {
 
     }
 
-    void Maxwell::foc_current_torque_control() {
+    void Maxwell::dc_current_torque_control() {
         driver->enable(true);
         // Ensure 3x PWM setup
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
@@ -686,25 +661,16 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
 
-        PIDController d_pid_controller =
-            PIDController(  5,
-                            1000,
-                            0.0,
-                            0.0,
-                            1,
-                            1);
         PIDController q_pid_controller =
             PIDController(  5,
-                            1000,
+                            0.1,
                             0.0,
                             0.0,
-                            1,
+                            max_current,
                             1);
 
-        d_pid_controller.set_setpoint(0.0);
 
-        auto q_lpf = RCFilter(5);
-        auto d_lpf = RCFilter(5);
+        auto I_DC_LPF = RCFilter(1);
         uint32_t prev_millis = 0;
         uint32_t current_time_ms = millis();
         uint32_t current_time_us = micros();
@@ -714,6 +680,9 @@ namespace Maxwell {
             float I_q = pwm_input->read_percentage() / 100.0 * max_current;
             q_pid_controller.set_setpoint(I_q);
 
+            encoder->update();
+            float theta = encoder->get_angle();
+
             driver->current_sensors->read();
             PhaseCurrents currents = {
                 driver->current_sensors->get_current_a(),
@@ -721,18 +690,17 @@ namespace Maxwell {
                 driver->current_sensors->get_current_c()
             };
             alpha_beta_struct ab_vec = clarke_transform(currents);
-            dq_struct dq_meas = park_transform(ab_vec);
+            dq_struct dq_meas = park_transform(ab_vec, theta);
 
             // Low pass filter the dq measurements
-            dq_meas.d = d_lpf.update(dq_meas.d, current_time_us);
-            dq_meas.q = q_lpf.update(dq_meas.q, current_time_us);
+            float I_DC = sqrt(ab_vec.alpha*ab_vec.alpha + ab_vec.beta*ab_vec.beta) * (dq_meas.q > 0) ? 1 : -1;
+            I_DC = I_DC_LPF.update(I_DC, current_time_us);
 
             // Update the PID controllers
-            dq_struct command_dq = {0.5, 0};
-            // command_dq.d = d_pid_controller.update(dq_meas.d);
-            // command_dq.q = q_pid_controller.update(dq_meas.q);
-            //
-            alpha_beta_struct command_ab = reverse_park_transform(command_dq); // VALIDATE THIS
+            dq_struct command_dq = {0, 0};
+            command_dq.q = q_pid_controller.update(I_DC);
+
+            alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta);
             PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
             set_phase_voltages(command_voltages.current_a,
                                 command_voltages.current_b,
@@ -744,13 +712,107 @@ namespace Maxwell {
                                             currents.current_c};
 
                 alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
-                dq_frame.values = {dq_meas.d, dq_meas.q, command_dq.d, command_dq.q};
+                dq_frame.values = {I_DC, command_dq.q, I_q};
+                command_voltage_frame.values = {command_voltages.current_a,
+                                                    command_voltages.current_b,
+                                                    command_voltages.current_c};
+
                 rotor_position_frame.values = {encoder->get_angle()};
 
                 send_frame(phase_current_frame);
                 send_frame(alpha_beta_frame);
                 send_frame(dq_frame);
                 send_frame(rotor_position_frame);
+                send_frame(command_voltage_frame);
+                prev_millis = current_time_ms;
+            }
+
+        }
+    }
+
+
+    void Maxwell::foc_current_torque_control() {
+        driver->enable(true);
+        // Ensure 3x PWM setup
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
+        digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
+
+        PIDController d_pid_controller =
+            PIDController(  5,
+                            0.1,
+                            0.0,
+                            0.0,
+                            max_current,
+                            1);
+
+        PIDController q_pid_controller =
+            PIDController(  5,
+                            0.1,
+                            0.0,
+                            0.0,
+                            max_current,
+                            1);
+
+        d_pid_controller.set_setpoint(0.0);
+
+        auto q_lpf = RCFilter(2);
+        auto d_lpf = RCFilter(2);
+        uint32_t prev_millis = 0;
+        uint32_t current_time_ms = millis();
+        uint32_t current_time_us = micros();
+        while (true) {
+            current_time_us = micros();
+            current_time_ms = millis();
+            float I_q = pwm_input->read_percentage() / 100.0 * max_current;
+            q_pid_controller.set_setpoint(I_q);
+
+            encoder->update();
+            float theta = encoder->get_angle();
+
+            driver->current_sensors->read();
+            PhaseCurrents currents = {
+                driver->current_sensors->get_current_a(),
+                driver->current_sensors->get_current_b(),
+                driver->current_sensors->get_current_c()
+            };
+            alpha_beta_struct ab_vec = clarke_transform(currents);
+            dq_struct dq_meas = park_transform(ab_vec, theta);
+
+            // Low pass filter the dq measurements
+            dq_meas.d = d_lpf.update(dq_meas.d, current_time_us);
+            dq_meas.q = q_lpf.update(dq_meas.q, current_time_us);
+
+            // Update the PID controllers
+            dq_struct command_dq = {0, I_q};
+            // command_dq.d = d_pid_controller.update(dq_meas.d);
+            // command_dq.q = q_pid_controller.update(dq_meas.q);
+            //
+            alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta);
+            PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
+            set_phase_voltages(command_voltages.current_a,
+                                command_voltages.current_b,
+                                command_voltages.current_c);
+            if (current_time_ms - prev_millis >= 30) {
+                // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
+                phase_current_frame.values = {currents.current_a,
+                                            currents.current_b,
+                                            currents.current_c};
+
+                alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
+                dq_frame.values = {dq_meas.d, dq_meas.q, command_dq.d, command_dq.q, I_q};
+                command_voltage_frame.values = {command_voltages.current_a,
+                                                    command_voltages.current_b,
+                                                    command_voltages.current_c};
+
+                rotor_position_frame.values = {encoder->get_angle()};
+
+                send_frame(phase_current_frame);
+                send_frame(alpha_beta_frame);
+                send_frame(dq_frame);
+                send_frame(rotor_position_frame);
+                send_frame(command_voltage_frame);
                 prev_millis = current_time_ms;
             }
 
@@ -758,31 +820,33 @@ namespace Maxwell {
     }
 
     alpha_beta_struct Maxwell::clarke_transform(PhaseCurrents currents) { // currents to alpha-beta
+        // float I_alpha = currents.current_a;
+        // float I_beta = (currents.current_a  + 2*currents.current_b) / _SQRT3;
+
+        // Altenative Amplitude-invariant version
         float I_alpha = currents.current_a;
-        float I_beta = (currents.current_a  + 2*currents.current_b) / _SQRT3;
+        float I_beta = (currents.current_b - currents.current_c) / _SQRT3;
+
         alpha_beta_struct ab = {I_alpha, I_beta};
         curr_struct->alpha_beta = ab;
         return ab;
     }
 
-    dq_struct Maxwell::park_transform(alpha_beta_struct ab_vec) { // alpha-beta to dq
+    dq_struct Maxwell::park_transform(alpha_beta_struct ab_vec, float theta) { // alpha-beta to dq
         // the park transform
-        encoder->update();
-        float electrical_theta = encoder->get_angle()  * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
-        float d = ab_vec.alpha * cos(electrical_theta)  + ab_vec.beta * sin(electrical_theta);
-        float q = -ab_vec.alpha * sin(electrical_theta) + ab_vec.beta * cos(electrical_theta);
+        float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
+        float d = ab_vec.alpha * _cos(electrical_theta)  + ab_vec.beta * _sin(electrical_theta);
+        float q = -ab_vec.alpha * _sin(electrical_theta) + ab_vec.beta * _cos(electrical_theta);
         dq_struct dq = {d, q};
-        curr_struct->dq = dq;
         return dq;
     }
 
-    alpha_beta_struct Maxwell::reverse_park_transform(dq_struct dq_vec) {  // dq to alpha-beta
-        encoder->update();
-        float electrical_theta = encoder->get_angle()  * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
-        // float U_alpha = U_q*_sin(electrical_theta);
-        // float U_beta  = U_q*_cos(electrical_theta);
-        float alpha = dq_vec.d * cos(electrical_theta) - dq_vec.q * sin(electrical_theta);
-        float beta  = dq_vec.d * sin(electrical_theta) + dq_vec.q * cos(electrical_theta);
+    alpha_beta_struct Maxwell::reverse_park_transform(dq_struct dq_vec, float theta) {  // dq to alpha-beta
+        float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
+        double c = _cos(electrical_theta);
+        double s = _sin(electrical_theta);
+        float alpha = dq_vec.d * c - dq_vec.q * s;
+        float beta  = dq_vec.d * s + dq_vec.q * c;
         alpha_beta_struct alpha_beta = {alpha, beta};
         curr_struct->alpha_beta = alpha_beta;
         return alpha_beta;
@@ -878,7 +942,6 @@ namespace Maxwell {
                 pid_controller->set_setpoint(0);
                 // current_sensors->calibrate_offsets();
             }
-            state_feedback();
         }
 
         // STOP
@@ -992,8 +1055,4 @@ namespace Maxwell {
 
 
     }
-
-
-
-
 }
