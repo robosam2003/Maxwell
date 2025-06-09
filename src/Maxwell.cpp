@@ -495,30 +495,19 @@ namespace Maxwell {
         while (true) {
             // Read pwm input and map as a voltage:
             float U_q = pwm_input->read_percentage() / 100.0 * max_voltage;
-            U_q = -U_q;
+            // U_q = -U_q;
             // Voltage Limit
             // U_q = constrain(U_q, 0, max_voltage);
             // Read the encoder angle
             encoder->update();
             float theta = encoder->get_angle();
-            float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
+            // float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
+            dq_struct command_dq = {0, U_q};
+            set_phase_voltages(command_dq);
 
-            // Calculate the required voltages
-            float U_alpha = U_q*_sin(electrical_theta);
-            float U_beta  = U_q*_cos(electrical_theta);
-
-
-            // Calculate the phase voltages
-            float v_a = U_alpha;
-            float v_b = (-U_alpha + M_SQRT3*U_beta) / 2;
-            float v_c = (-U_alpha - M_SQRT3*U_beta) / 2;
-            // Set the phase voltages
-            set_phase_voltages(v_a, v_b, v_c);
-            // Serial.println(text);
-            i++;
             uint32_t current_time = millis();
-
-            if (current_time - prev_millis >= 10) { // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
+#ifdef SERIAL_FEEDBACK_ENABLED
+            if (current_time - prev_millis >= 30) { // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
                 driver->current_sensors->read();
                 double currents[3] = {driver->current_sensors->get_current_a(),
                                      driver->current_sensors->get_current_b(),
@@ -549,6 +538,7 @@ namespace Maxwell {
                 // Serial.println(currents[2]);
                 prev_millis = current_time;
             }
+#endif
 
 
         }
@@ -565,7 +555,7 @@ namespace Maxwell {
 
         PIDController position_pid_controller =
             PIDController(  20,
-                            0.0,
+                            1,
                             0.0,
                             0.0,
                             10,
@@ -614,8 +604,9 @@ namespace Maxwell {
             float v_c = (-U_alpha - M_SQRT3*U_beta) / 2;
             // Set the phase voltages
             set_phase_voltages(v_a, v_b, v_c);
-
-            if (current_time_ms - prev_millis >= 30) { // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
+#ifdef SERIAL_FEEDBACK_ENABLED
+            if (current_time_ms - prev_millis >= 30) {
+                // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
                 driver->current_sensors->read();
                 double currents[3] = {driver->current_sensors->get_current_a(),
                                      driver->current_sensors->get_current_b(),
@@ -646,11 +637,10 @@ namespace Maxwell {
                 // position_pid_controller.print_state();
                 // velocity_pid_controller.print_state();
 
-
                 prev_millis = current_time_ms;
             }
+#endif
         }
-
     }
 
     void Maxwell::dc_current_torque_control() {
@@ -705,6 +695,7 @@ namespace Maxwell {
             set_phase_voltages(command_voltages.current_a,
                                 command_voltages.current_b,
                                 command_voltages.current_c);
+#ifdef SERIAL_FEEDBACK_ENABLED
             if (current_time_ms - prev_millis >= 30) {
                 // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
                 phase_current_frame.values = {currents.current_a,
@@ -726,10 +717,9 @@ namespace Maxwell {
                 send_frame(command_voltage_frame);
                 prev_millis = current_time_ms;
             }
-
+#endif
         }
     }
-
 
     void Maxwell::foc_current_torque_control() {
         driver->enable(true);
@@ -749,27 +739,46 @@ namespace Maxwell {
 
         PIDController q_pid_controller =
             PIDController(  5,
-                            0.1,
+                            0.5,
                             0.0,
                             0.0,
                             max_current,
-                            1);
+                            2);
+
+        // PIDController velocity_pid_controller =
+        //     PIDController(  0.1,
+        //                     0.1,
+        //                     0.0,
+        //                     0.0,
+        //                     max_current,
+        //                     max_current);
 
         d_pid_controller.set_setpoint(0.0);
 
-        auto q_lpf = RCFilter(2);
-        auto d_lpf = RCFilter(2);
+        auto q_lpf = RCFilter(0.5);
+        auto d_lpf = RCFilter(0.5);
+        auto velocity_lpf = RCFilter(4);
         uint32_t prev_millis = 0;
         uint32_t current_time_ms = millis();
         uint32_t current_time_us = micros();
         while (true) {
             current_time_us = micros();
             current_time_ms = millis();
-            float I_q = pwm_input->read_percentage() / 100.0 * max_current;
-            q_pid_controller.set_setpoint(I_q);
+            // float vel_ref = pwm_input->read_percentage() / 100.0 * 2;
+            // velocity_pid_controller.set_setpoint(vel_ref);
 
             encoder->update();
             float theta = encoder->get_angle();
+            float rotor_velocity = encoder->get_velocity();
+            rotor_velocity = velocity_lpf.update(rotor_velocity, current_time_us);
+            if (rotor_velocity < 0.2 && rotor_velocity > -0.2) {
+                rotor_velocity = 0; // Prevents the PID controller from going crazy
+            }
+            // float I_q = velocity_pid_controller.update(rotor_velocity);
+
+            float I_q = pwm_input->read_percentage() / 100.0 * max_current;
+            q_pid_controller.set_setpoint(I_q);
+
 
             driver->current_sensors->read();
             PhaseCurrents currents = {
@@ -785,16 +794,17 @@ namespace Maxwell {
             dq_meas.q = q_lpf.update(dq_meas.q, current_time_us);
 
             // Update the PID controllers
-            dq_struct command_dq = {0, I_q};
-            // command_dq.d = d_pid_controller.update(dq_meas.d);
-            // command_dq.q = q_pid_controller.update(dq_meas.q);
+            dq_struct command_dq = {0, 0};
+            command_dq.d = d_pid_controller.update(dq_meas.d);
+            command_dq.q = q_pid_controller.update(dq_meas.q);
             //
             alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta);
             PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
             set_phase_voltages(command_voltages.current_a,
                                 command_voltages.current_b,
                                 command_voltages.current_c);
-            if (current_time_ms - prev_millis >= 30) {
+
+            if (current_time_ms - prev_millis >= 100) {
                 // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
                 phase_current_frame.values = {currents.current_a,
                                             currents.current_b,
@@ -806,16 +816,17 @@ namespace Maxwell {
                                                     command_voltages.current_b,
                                                     command_voltages.current_c};
 
-                rotor_position_frame.values = {encoder->get_angle()};
+                rotor_position_frame.values = {theta};
+                rotor_velocity_frame.values = {rotor_velocity};
 
-                send_frame(phase_current_frame);
-                send_frame(alpha_beta_frame);
+                // send_frame(phase_current_frame);
+                // send_frame(alpha_beta_frame);
                 send_frame(dq_frame);
-                send_frame(rotor_position_frame);
-                send_frame(command_voltage_frame);
+                // send_frame(rotor_position_frame);
+                // send_frame(rotor_velocity_frame);
+                // send_frame(command_voltage_frame);
                 prev_millis = current_time_ms;
             }
-
         }
     }
 

@@ -36,7 +36,7 @@ public:
     double _current_a;
     double _current_b;
     double _current_c;
-	bool filtered = true;
+	bool filtered = false;
 	bool inverted = true;
 
     explicit CurrentSensors(uint32_t pin_a,

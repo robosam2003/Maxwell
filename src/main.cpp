@@ -64,13 +64,14 @@ void setup() {
     // maxwell.foc_init_sequence();
 }
 
+#define SERIAL_FEEDBACK_ENABLED
 
 
 void loop() {
     // maxwell.sinusoidal_position_control();
     // maxwell.foc_position_control();
 
-
+    // maxwell.voltage_position_control();
 
     // maxwell.voltage_torque_control();
     // maxwell.dc_current_torque_control();
