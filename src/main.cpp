@@ -37,6 +37,10 @@ void loop() {
 #include "pin_definitions.h"
 #include "Maxwell.h"
 #include "PWMInput.h"
+#include "stm32f4xx_hal_uart.h"
+#include <cstring> // For strlen
+
+UART_HandleTypeDef huart1;
 
 
 Maxwell::Maxwell maxwell;
@@ -48,8 +52,6 @@ void pwm_callback() {
 
 void setup() {
     Serial.begin(921600);
-
-    // pinMode(GREEN_LED_PIN, OUTPUT);
     Serial.println("Setup Start");
 
     maxwell.setup();
@@ -67,7 +69,10 @@ void setup() {
 #define SERIAL_FEEDBACK_ENABLED
 
 
+
 void loop() {
+
+
     // maxwell.sinusoidal_position_control();
     // maxwell.foc_position_control();
 

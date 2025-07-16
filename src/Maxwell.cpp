@@ -21,7 +21,7 @@ namespace Maxwell {
         driver = new DRV8323::DRV8323(
             DRV8323_CS_PIN,
             SPI_1,
-            1000000,
+            20000000,
             DRV8323_HI_A_PIN,
             DRV8323_HI_B_PIN,
             DRV8323_HI_C_PIN,
@@ -29,7 +29,7 @@ namespace Maxwell {
         encoder = new AS5047P::AS5047P(
             AS5047P_CS_PIN,
             SPI_2,
-            1000000);
+            20000000);
 
         trigger = new triggered{false, false, false};
         pid_controller = new PIDController(0.2, 2, 0,
@@ -496,12 +496,10 @@ namespace Maxwell {
             // Read pwm input and map as a voltage:
             float U_q = pwm_input->read_percentage() / 100.0 * max_voltage;
             // U_q = -U_q;
-            // Voltage Limit
-            // U_q = constrain(U_q, 0, max_voltage);
-            // Read the encoder angle
+
             encoder->update();
             float theta = encoder->get_angle();
-            // float electrical_theta = fmod(theta * POLE_PAIRS_6374, 2*PI);
+
             dq_struct command_dq = {0, U_q};
             set_phase_voltages(command_dq);
 
@@ -539,8 +537,6 @@ namespace Maxwell {
                 prev_millis = current_time;
             }
 #endif
-
-
         }
 
     }
@@ -555,14 +551,14 @@ namespace Maxwell {
 
         PIDController position_pid_controller =
             PIDController(  20,
-                            1,
+                            0.0,
                             0.0,
                             0.0,
                             10,
                             10);
         PIDController velocity_pid_controller =
             PIDController(  0.2,
-                            3,
+                            0.0,
                             0.0,
                             0.0,
                             max_current,
@@ -575,7 +571,7 @@ namespace Maxwell {
         while (true) {
             uint32_t current_time_us = micros();
             uint32_t current_time_ms = millis();
-            double desired_angle = input_lpf.update(pwm_input->read_percentage() / 100.0 * 2 * PI, current_time_us); // Desired_angle is from the pwm_input
+            double desired_angle = input_lpf.update(pwm_input->read_percentage() / 100.0 * 2 * PI * 5, current_time_us); // Desired_angle is from the pwm_input
             position_pid_controller.set_setpoint(desired_angle);
 
             encoder->update();
@@ -588,22 +584,13 @@ namespace Maxwell {
             velocity_pid_controller.set_setpoint(desired_velocity);
             // double rotor_velocity_error = desired_velocity - rotor_velocity;
             double I_q = velocity_pid_controller.update(rotor_velocity);
-            I_q = constrain(I_q, -max_current, max_current);
+            // I_q = constrain(I_q, -max_current, max_current);
 
+            position_pid_controller.print_state();
+            velocity_pid_controller.print_state();
 
-
-            double electrical_theta = rotor_theta * POLE_PAIRS_6374;
-
-            // Calculate the required voltages
-            float U_alpha = I_q*_sin(electrical_theta);
-            float U_beta  = I_q*_cos(electrical_theta);
-
-            // Calculate the phase voltages
-            float v_a = U_alpha;
-            float v_b = (-U_alpha + M_SQRT3*U_beta) / 2;
-            float v_c = (-U_alpha - M_SQRT3*U_beta) / 2;
-            // Set the phase voltages
-            set_phase_voltages(v_a, v_b, v_c);
+            dq_struct command_dq = {0, -I_q};
+            set_phase_voltages(command_dq);
 #ifdef SERIAL_FEEDBACK_ENABLED
             if (current_time_ms - prev_millis >= 30) {
                 // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
@@ -729,43 +716,51 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
 
+        // nameset for dq
+        // nameset_frame.name = "dq";
+        // nameset_frame.values = {"meas d", "meas q", "command_d", "command_q", "I_q"};
+        // send_frame(nameset_frame, true);
+
+
         PIDController d_pid_controller =
-            PIDController(  5,
-                            0.1,
+            PIDController(  10,
+                            0.0,
                             0.0,
                             0.0,
                             max_current,
                             1);
 
         PIDController q_pid_controller =
-            PIDController(  5,
-                            0.5,
+            PIDController(  10,
+                            0.0,
                             0.0,
                             0.0,
                             max_current,
-                            2);
+                            3);
 
-        // PIDController velocity_pid_controller =
-        //     PIDController(  0.1,
-        //                     0.1,
-        //                     0.0,
-        //                     0.0,
-        //                     max_current,
-        //                     max_current);
+        PIDController velocity_pid_controller =
+            PIDController(  0.1,
+                            1,
+                            0.000,
+                            0.0,
+                            max_current,
+                            max_current);
 
         d_pid_controller.set_setpoint(0.0);
 
         auto q_lpf = RCFilter(0.5);
         auto d_lpf = RCFilter(0.5);
-        auto velocity_lpf = RCFilter(4);
+        auto command_q_lpf = RCFilter(40);
+        auto command_d_lpf = RCFilter(40);
+        auto velocity_lpf = RCFilter(0.5);
         uint32_t prev_millis = 0;
         uint32_t current_time_ms = millis();
         uint32_t current_time_us = micros();
         while (true) {
             current_time_us = micros();
             current_time_ms = millis();
-            // float vel_ref = pwm_input->read_percentage() / 100.0 * 2;
-            // velocity_pid_controller.set_setpoint(vel_ref);
+            float vel_ref = pwm_input->read_percentage() / 100.0 * 100;
+            velocity_pid_controller.set_setpoint(vel_ref);
 
             encoder->update();
             float theta = encoder->get_angle();
@@ -795,38 +790,42 @@ namespace Maxwell {
 
             // Update the PID controllers
             dq_struct command_dq = {0, 0};
-            command_dq.d = d_pid_controller.update(dq_meas.d);
-            command_dq.q = q_pid_controller.update(dq_meas.q);
-            //
+            command_dq.d = command_d_lpf.update(d_pid_controller.update(dq_meas.d), current_time_us);
+            command_dq.q = command_q_lpf.update(q_pid_controller.update(dq_meas.q), current_time_us);
             alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta);
             PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
             set_phase_voltages(command_voltages.current_a,
                                 command_voltages.current_b,
                                 command_voltages.current_c);
+            float loop_freq = 1 / ((micros() - current_time_us) / 1000000.0);
+            Serial.println(loop_freq);
 
-            if (current_time_ms - prev_millis >= 100) {
-                // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
-                phase_current_frame.values = {currents.current_a,
-                                            currents.current_b,
-                                            currents.current_c};
-
-                alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
-                dq_frame.values = {dq_meas.d, dq_meas.q, command_dq.d, command_dq.q, I_q};
-                command_voltage_frame.values = {command_voltages.current_a,
-                                                    command_voltages.current_b,
-                                                    command_voltages.current_c};
-
-                rotor_position_frame.values = {theta};
-                rotor_velocity_frame.values = {rotor_velocity};
-
-                // send_frame(phase_current_frame);
-                // send_frame(alpha_beta_frame);
-                send_frame(dq_frame);
-                // send_frame(rotor_position_frame);
-                // send_frame(rotor_velocity_frame);
-                // send_frame(command_voltage_frame);
-                prev_millis = current_time_ms;
-            }
+            // if (current_time_ms - prev_millis >= 100) {
+            //     // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
+            //     phase_current_frame.values = {currents.current_a,
+            //                                 currents.current_b,
+            //                                 currents.current_c};
+            //
+            //     alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
+            //     dq_frame.values = {dq_meas.d, dq_meas.q, command_dq.d, command_dq.q, I_q};
+            //     command_voltage_frame.values = {command_voltages.current_a,
+            //                                         command_voltages.current_b,
+            //                                         command_voltages.current_c};
+            //
+            //     rotor_position_frame.values = {theta};
+            //     rotor_velocity_frame.values = {vel_ref, rotor_velocity};
+            //
+            //     send_frame(phase_current_frame);
+            //     // send_frame(alpha_beta_frame);
+            //     send_frame(dq_frame);
+            //     // send_frame(phase_current_frame);
+            //
+            //     // q_pid_controller.print_state();
+            //     // send_frame(rotor_position_frame);
+            //     send_frame(rotor_velocity_frame);
+            //     // send_frame(command_voltage_frame);
+            //     prev_millis = current_time_ms;
+            // }
         }
     }
 

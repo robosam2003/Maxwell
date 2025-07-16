@@ -63,8 +63,14 @@ inline void send_frame(float_frame& frame) {
   Serial.println(frame_string);
 }
 
-inline void send_frame(string_frame& frame) {
+inline void send_name_frame(string_frame& frame) {
+
+}
+
+inline void send_frame(string_frame& frame, bool nameset=false) {
   String frame_string = "";
+  if (nameset) frame_string += "NAMESET";
+
   frame_string += frame.name; frame_string += "/";
   for (auto value : frame.values) {
     frame_string += value; frame_string += "/";
@@ -185,12 +191,14 @@ static float sin_table[512] = {0.0000000000000000, 0.0030739605733556, 0.0061478
 
 
 __attribute__((weak)) float _sin(float angle) {
-    while (angle < 0) {
-        angle += _2PI;
-    }
-    while (angle > _2PI) {
-        angle -= _2PI;
-    }
+    // while (angle < 0) {
+    //     angle += _2PI;
+    // }
+    // while (angle > _2PI) {
+    //     angle -= _2PI;
+    // }
+    angle = angle - floor(angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
+
     int i = static_cast<int>((angle / _2PI)*512*4);
     i %= 2048;
     float ret = 0;

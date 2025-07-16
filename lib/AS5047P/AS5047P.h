@@ -19,7 +19,8 @@ namespace AS5047P {
         SPIClass _spi;
         SPISettings _settings;
         DIRECTION _direction;
-        float prev_rel_angle = 0.0; // Previous relative angle (0 to 2*pi)
+        float prev_raw_angle = 0.0; // Previous relative angle (0 to 2*pi)
+        float prev_absolute_angle = 0.0;
         long full_rotations = 0; // Number of full rotations
         float absolute_angle = 0.0; // Absolute angle factoring in full rotations (radians)
 

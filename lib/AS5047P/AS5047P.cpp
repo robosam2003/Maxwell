@@ -65,7 +65,7 @@ namespace AS5047P {
     }
 
     void AS5047P::update() {
-        float prev_absolute_angle = absolute_angle; // Store the angle from previous update
+        prev_absolute_angle = absolute_angle; // Store the angle from previous update
 
         uint16_t angle = 0;
         if (comp) {
@@ -75,21 +75,15 @@ namespace AS5047P {
             angle = read_reg(REGISTER::ANGLEUNCOMP);
         }
         angle = angle & 0b0011111111111111; // Mask the 2 MSB bits
-        float angle_val = (static_cast<float>(angle) / 16384.0) * _2PI;
-        float d_angle = angle_val - prev_rel_angle;
+        float angle_raw_val = (static_cast<float>(angle) / 16384.0) * _2PI;
+        float d_angle = angle_raw_val - prev_raw_angle;
         if (abs(d_angle) > 0.5f*_2PI) { // This relies on the update() method being called frequently enough
             full_rotations += (d_angle > 0) ? -1 : 1;
         }
-        prev_rel_angle = angle_val;
-        absolute_angle = (static_cast<float>(full_rotations) * _2PI) + prev_rel_angle;
+        prev_raw_angle = angle_raw_val;
+        absolute_angle = (static_cast<float>(full_rotations) * _2PI) + prev_raw_angle;
 
         // Velocity calculation
-        uint32_t current_time = micros();
-        // if (current_time - prev_time_us < 100) { // 100 microseconds
-        //     return;
-        // }
-        velocity = (absolute_angle - prev_absolute_angle) / ((current_time - prev_time_us) * 1e-6f); // rad/s
-        prev_time_us = current_time;
     }
 
     float AS5047P::get_angle() {
@@ -102,6 +96,13 @@ namespace AS5047P {
 
     float AS5047P::get_velocity() {
         // update();
+        uint32_t current_time = micros();
+        float Ts = (current_time - prev_time_us) * 1e-6f; // Convert microseconds to seconds
+        if (Ts < 100e-6) { // 100 microseconds
+            return velocity;
+        }
+        velocity = (absolute_angle - prev_absolute_angle) / ((current_time - prev_time_us) * 1e-6f); // rad/s
+        prev_time_us = current_time;
         return velocity;
     }
 

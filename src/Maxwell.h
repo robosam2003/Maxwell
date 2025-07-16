@@ -98,6 +98,10 @@ namespace Maxwell {
         };
         // float_frame
         // float_frame
+        string_frame nameset_frame = {
+            .name = "Nameset",
+            .values = {}
+        };
 
         float_frame alpha_beta_frame = {
             .name = "Alpha-Beta",
@@ -121,13 +125,13 @@ namespace Maxwell {
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
         AS5047P::AS5047P* encoder;
-        PIDController* pid_controller;
+        PIDController* pid_controller; // for hall mode
         triggered* trigger;
         PWMInput* pwm_input;
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 4;   // V
+        float max_voltage = 3;   // V
         float max_current = 3;   // A
         float align_max_voltage = 1.5;
         float offset = 0.1; // V
