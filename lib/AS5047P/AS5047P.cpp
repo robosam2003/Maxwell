@@ -102,6 +102,9 @@ namespace AS5047P {
             return velocity;
         }
         velocity = (absolute_angle - prev_absolute_angle) / ((current_time - prev_time_us) * 1e-6f); // rad/s
+        if (_direction == CCW) {
+            velocity = -velocity; // Adjust for direction
+        }
         prev_time_us = current_time;
         return velocity;
     }

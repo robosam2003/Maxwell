@@ -191,12 +191,6 @@ static float sin_table[512] = {0.0000000000000000, 0.0030739605733556, 0.0061478
 
 
 __attribute__((weak)) float _sin(float angle) {
-    // while (angle < 0) {
-    //     angle += _2PI;
-    // }
-    // while (angle > _2PI) {
-    //     angle -= _2PI;
-    // }
     angle = angle - floor(angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
 
     int i = static_cast<int>((angle / _2PI)*512*4);
@@ -220,9 +214,6 @@ __attribute__((weak)) float _sin(float angle) {
 __attribute__((weak)) float _cos(float angle) {
   return _sin(_PI_2 - angle);
 }
-
-
-
 
 
 // function finds the appropriate timer source trigger for the master/slave timer combination
