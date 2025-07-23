@@ -745,14 +745,8 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
 
-        // nameset for dq
-        // nameset_frame.name = "dq";
-        // nameset_frame.values = {"meas d", "meas q", "command_d", "command_q", "I_q"};
-        // send_frame(nameset_frame, true);
-
-
         PIDController d_pid_controller =
-            PIDController(  1,
+            PIDController(  1.0,
                             0.0,
                             0.0,
                             0.0,
@@ -760,46 +754,75 @@ namespace Maxwell {
                             1);
 
         PIDController q_pid_controller =
-            PIDController(  1,
+            PIDController(  1.0,
                             0.00,
                             0.0,
                             0.0,
                             max_current,
                             3);
-
+        PIDController position_pid_controller =
+            PIDController(  20,
+                            0.1,
+                            0.0,
+                            0.0,
+                            150,
+                            150);
         PIDController velocity_pid_controller =
-            PIDController(  0.1,
+            PIDController(  0.2,
                             0.5,
                             0.000,
                             0.0,
-                            max_current,
-                            max_current);
-        PIDController position_pid_controller =
-            PIDController(  1,
-                            0.0,
-                            0.0,
-                            0.0,
-                            10,
-                            10);
+                            20,
+                            20);
+
 
         d_pid_controller.set_setpoint(0.0);
 
         auto q_lpf = RCFilter(0.5);
         auto d_lpf = RCFilter(0.5);
-        auto command_q_lpf = RCFilter(40);
-        auto command_d_lpf = RCFilter(40);
-        auto velocity_lpf = RCFilter(1);
-        auto input_lpf = RCFilter(1);
+        auto command_q_lpf = RCFilter(40.0);
+        auto command_d_lpf = RCFilter(40.0);
+        auto velocity_lpf = RCFilter(2.0);
+        auto input_lpf = RCFilter(1.0);
+
+
+        double step_period = 2.0; // seconds
+        uint32_t step_period_start = millis();
+        double high_angle = 2.0 * PI * 10.0; // 15 revolutions
+        double low_angle = - high_angle; // 0 revolutions
+        double desired_ramp_to_angle = low_angle; // radians
+        double desired_angle = low_angle;
+
+
+
         uint32_t prev_millis = 0;
         uint32_t current_time_ms = millis();
         uint32_t current_time_us = micros();
         while (true) {
             current_time_us = micros();
             current_time_ms = millis();
+            if (current_time_ms - step_period_start >= (step_period * 1000.0)) {
+                step_period_start = current_time_ms;
+                desired_ramp_to_angle = (desired_ramp_to_angle == low_angle) ? high_angle : low_angle;
+            }
+            else {
+                double ramp_step_percentage = 0.5;
+                double ramp_duration = step_period * ramp_step_percentage;
+                double elapsed = (current_time_ms - step_period_start) / 1000.0; // Convert to seconds
+                double ramp_progress = elapsed / ramp_duration; // 0 to 1
+                if (elapsed <= ramp_duration) {
+                    if (desired_ramp_to_angle == low_angle) {
+                        desired_angle = high_angle - (high_angle - low_angle) * ramp_progress;
+                    } else if (desired_ramp_to_angle == high_angle) {
+                        desired_angle = low_angle + (high_angle - low_angle) * ramp_progress;
+                    }
+                } else {
+                    desired_angle = desired_ramp_to_angle;
+                }
+            }
 
-
-            float pos_ref = input_lpf.update(pwm_input->read_percentage() / 100.0 * 1, current_time_us); // Desired velocity in rad/s
-            position_pid_controller.set_setpoint(pos_ref);
+            // double pos_ref = input_lpf.update(pwm_input->read_percentage() / 100.0 * 2*PI * 20.0, current_time_us); // Desired velocity in rad/s
+            position_pid_controller.set_setpoint(desired_angle);
 
 
             encoder->update();
@@ -813,9 +836,9 @@ namespace Maxwell {
 
             velocity_pid_controller.set_setpoint(vel_ref);
 
-            // float I_q = velocity_pid_controller.update(rotor_velocity);
+            float I_q = (-1.0) * velocity_pid_controller.update(rotor_velocity);
 
-            float I_q = pwm_input->read_percentage() / 100.0 * max_current;
+            // float I_q = pwm_input->read_percentage() / 100.0 * max_current;
             q_pid_controller.set_setpoint(I_q);
 
 
@@ -856,7 +879,7 @@ namespace Maxwell {
                                                     command_voltages.current_b,
                                                     command_voltages.current_c};
 
-                rotor_position_frame.values = {pos_ref, theta};
+                rotor_position_frame.values = {desired_angle, theta};
                 rotor_velocity_frame.values = {vel_ref, rotor_velocity};
 
                 send_frame(phase_current_frame);
