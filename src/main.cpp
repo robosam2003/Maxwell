@@ -1,6 +1,7 @@
 
 
 #define MAXWELL_STUDIO_OUTPUT
+#define HARDWARE_V2_0
 
 
 // #define TEST
@@ -32,45 +33,51 @@ void loop() {
 #ifndef TEST
 // -----------------------------------------------------------------------------------
 #include <Arduino.h>
-#include <string>
-
+// #include <string>
+//
 #include "pin_definitions.h"
-#include "Maxwell.h"
-#include "PWMInput.h"
-#include "stm32f4xx_hal_uart.h"
-#include <cstring> // For strlen
+// #include "Maxwell.h"
+// #include "PWMInput.h"
+// #include "stm32f4xx_hal_uart.h"
+// #include <cstring> // For strlen
 
-UART_HandleTypeDef huart1;
+// UART_HandleTypeDef huart1;
 
 
-Maxwell::Maxwell maxwell;
-PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
+// Maxwell::Maxwell maxwell;
+// PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
-void pwm_callback() {
-    pwm_input.pwm_callback();
-}
+// void pwm_callback() {
+//     pwm_input.pwm_callback();
+// }
 
 void setup() {
     Serial.begin(921600);
     Serial.println("Setup Start");
+    pinMode(GREEN_LED_PIN, OUTPUT);
 
-    maxwell.setup();
-    maxwell.init_pwm_3x();
-
-    pwm_input.set_callback(pwm_callback);
-    maxwell.pwm_input = &pwm_input;
-    maxwell.driver->perform_current_sense_calibration();
-    maxwell.driver->current_sensors->calibrate_offsets();
-    maxwell.driver->clear_fault();
+    // maxwell.setup();
+    // maxwell.init_pwm_3x();
+    //
+    // pwm_input.set_callback(pwm_callback);
+    // maxwell.pwm_input = &pwm_input;
+    // maxwell.driver->perform_current_sense_calibration();
+    // maxwell.driver->current_sensors->calibrate_offsets();
+    // maxwell.driver->clear_fault();
 
     // maxwell.foc_init_sequence();
 }
 
 #define SERIAL_FEEDBACK_ENABLED
 
-
+int i = 0;
 
 void loop() {
+    // Blinky
+    Serial.println(i++);
+    digitalToggle(GREEN_LED_PIN);
+
+    delay(100);
 
 
     // maxwell.sinusoidal_position_control();
@@ -80,7 +87,7 @@ void loop() {
 
     // maxwell.voltage_torque_control();
     // maxwell.dc_current_torque_control();
-    maxwell.foc_current_torque_control();
+    // maxwell.foc_current_torque_control();
 
 
     // Blink

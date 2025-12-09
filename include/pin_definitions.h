@@ -70,7 +70,18 @@
 
 
 
-#endif //HARDWARE_V1_0
+#endif
+
+
+#ifdef HARDWARE_V2_0
+
+
+#define GREEN_LED_PIN				PB7
+
+
+
+#endif
+
 
 
 
