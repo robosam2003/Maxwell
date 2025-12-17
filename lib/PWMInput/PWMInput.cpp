@@ -11,7 +11,18 @@ PWMInput::PWMInput(int input_pin, INPUT_MODE input_mode, DIRECTION direction) {
     prev_rise_time = micros();
     prev_fall_time = micros();
     _pwm_value = 0;
-    pinMode(_input_pin, INPUT_PULLDOWN);
+
+    // Set PC6 as PWM input capture mode
+
+
+
+
+
+
+
+
+
+
 }
 
 void PWMInput::pwm_callback() {

@@ -28,18 +28,19 @@ namespace DRV8323 {
         pinMode(pin_c, OUTPUT);
 
 
+
+
         // TODO: Deal with this properly - this is a quick hack
-        // pinMode(DRV8323_LO_A_PIN, OUTPUT);
-        // pinMode(DRV8323_LO_B_PIN, OUTPUT);
-        // pinMode(DRV8323_LO_C_PIN, OUTPUT);
+        pinMode(DRV8323_LO_A_PIN, OUTPUT);
+        pinMode(DRV8323_LO_B_PIN, OUTPUT);
+        pinMode(DRV8323_LO_C_PIN, OUTPUT);
         // // Tie all low side pins HIGH to avoid hi-z state
         // digitalWrite(DRV8323_LO_A_PIN, HIGH);
         // digitalWrite(DRV8323_LO_B_PIN, HIGH);
         // digitalWrite(DRV8323_LO_C_PIN, HIGH);
 
         gate_en_pin = gate_enable_pin;
-
-
+        pinMode(gate_en_pin, OUTPUT);
 
         // Set up SPI settings - SPI MODE 1 because data is captured on the falling edge of the clock
         // and propagated on the rising edge - https://en.wikipedia.org/wiki/Serial_Peripheral_Interface
@@ -52,10 +53,10 @@ namespace DRV8323 {
         // Begin the SPI bus.
         _spi.begin();
 
-        current_sensors = new CurrentSensors(DRV8323_CURR_SENSE_A_PIN,
-                                            DRV8323_CURR_SENSE_B_PIN,
-                                            DRV8323_CURR_SENSE_C_PIN,
-                                            _csa_gain);
+        // current_sensors = new CurrentSensors(CURR_SENSE_A_PIN,
+        //                                     CURR_SENSE_B_PIN,
+        //                                     CURR_SENSE_C_PIN,
+        //                                     _csa_gain);
     }
 
     void DRV8323::enable(bool enable) {
@@ -191,6 +192,7 @@ namespace DRV8323 {
         uint16_t data = read_reg(REGISTER::DRIVER_CONTROL);
         data = data & 0b11110011111; // Mask the PWM_MODE bits
         data = data | (mode << 5);   // Set the PWM_MODE bits
+        Serial.println(data);
         write_reg(REGISTER::DRIVER_CONTROL, data);
     }
 
@@ -265,9 +267,9 @@ namespace DRV8323 {
     void DRV8323::default_configuration() {
         enable(true);
         set_pwm_mode(PWM_MODE::PWM_3x);
-        enable_CPUV_Fault(false);
-        enable_GDF(false);
-        set_current_gain(CSA_GAIN::GAIN_10_V_V);
+        // enable_CPUV_Fault(false);
+        // enable_GDF(false);
+        // set_current_gain(CSA_GAIN::GAIN_5_V_V);
         clear_fault();
 
         enable_csa_fet(false);

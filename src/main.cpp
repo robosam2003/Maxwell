@@ -1,5 +1,4 @@
-
-
+#define SERIAL_FEEDBACK_ENABLED
 #define MAXWELL_STUDIO_OUTPUT
 #define HARDWARE_V2_0
 
@@ -8,8 +7,6 @@
 #ifdef TEST
 #include "Arduino.h"
 #include "config.h"
-
-
 
 
 float_frame test_frame = {
@@ -27,57 +24,78 @@ void loop() {
 }
 #endif
 
-
-
-
 #ifndef TEST
 // -----------------------------------------------------------------------------------
 #include <Arduino.h>
-// #include <string>
+#include "SPI.h"
 //
 #include "pin_definitions.h"
-// #include "Maxwell.h"
+#include "Maxwell.h"
 // #include "PWMInput.h"
-// #include "stm32f4xx_hal_uart.h"
-// #include <cstring> // For strlen
+#include "stm32f4xx_hal_uart.h"
+#include <cstring> // For strlen
 
-// UART_HandleTypeDef huart1;
+Maxwell::Maxwell maxwell;
 
-
-// Maxwell::Maxwell maxwell;
 // PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
-// void pwm_callback() {
-//     pwm_input.pwm_callback();
-// }
+void pwm_callback() {
+    // pwm_input.pwm_callback();
+}
 
 void setup() {
-    Serial.begin(921600);
+    Serial.begin(115200);
     Serial.println("Setup Start");
     pinMode(GREEN_LED_PIN, OUTPUT);
 
-    // maxwell.setup();
-    // maxwell.init_pwm_3x();
-    //
+    pinMode(PC13, OUTPUT);
+    digitalWrite(PC13, HIGH);
+
+
+    maxwell.setup();
+    maxwell.init_pwm_3x();
+    maxwell.set_phase_voltages(-3, 0, 3);
+    // //
     // pwm_input.set_callback(pwm_callback);
     // maxwell.pwm_input = &pwm_input;
     // maxwell.driver->perform_current_sense_calibration();
     // maxwell.driver->current_sensors->calibrate_offsets();
-    // maxwell.driver->clear_fault();
+    maxwell.driver->clear_fault();
 
     // maxwell.foc_init_sequence();
+    analogReadResolution(12);
 }
 
-#define SERIAL_FEEDBACK_ENABLED
 
-int i = 0;
 
 void loop() {
-    // Blinky
-    Serial.println(i++);
     digitalToggle(GREEN_LED_PIN);
+    //
+    delay(10);
 
-    delay(100);
+    maxwell.driver->set_pwm_mode(DRV8323::PWM_3x);
+    Serial.println(maxwell.driver->read_reg(DRV8323::REGISTER::DRIVER_CONTROL));
+    Serial.println(maxwell.driver->get_fault_status_1_string());
+    Serial.println(maxwell.driver->get_fault_status_2_string());
+    Serial.println();
+
+
+    // Serial.println(maxwell.driver->read_reg(DRV8323::REGISTER::GATE_DRIVE_HS));
+    // Serial.println(maxwell.driver->read_reg(DRV8323::REGISTER::GATE_DRIVE_LS));
+    // Serial.println(maxwell.driver->read_reg(DRV8323::REGISTER::DRIVER_CONTROL));
+
+
+
+    // Serial.println(driver.read_reg(DRV8323::REGISTER::GATE_DRIVE_HS));
+    // Serial.println(driver.read_reg(DRV8323::REGISTER::GATE_DRIVE_LS));
+    // Serial.println(driver.read_reg(DRV8323::REGISTER::DRIVER_CONTROL));
+    // Serial.println(driver.read_reg(DRV8323::REGISTER::CSA_CONTROL));
+
+    // char strbuf[50]; sprintf(strbuf, "%lu, %lu, %lu",
+    //                         analogRead(CURR_SENSE_A_PIN),
+    //                         analogRead(CURR_SENSE_B_PIN),
+    //                         analogRead(CURR_SENSE_C_PIN));
+    // Serial.println(strbuf);
 
 
     // maxwell.sinusoidal_position_control();
