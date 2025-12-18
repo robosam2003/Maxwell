@@ -37,11 +37,16 @@ void loop() {
 
 Maxwell::Maxwell maxwell;
 
-// PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
-void pwm_callback() {
-    // pwm_input.pwm_callback();
-}
+controlConfig config = {
+    CONTROL_MODE::POSITION,
+    SENSOR_TYPE::MAGNETIC,
+    TORQUE_CONTROL_MODE::VOLTAGE,
+    MOTOR_TYPE::BLDC,
+    COMMAND_SOURCE::PWM
+};
+
+// PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
 void setup() {
     Serial.begin(115200);
@@ -52,9 +57,10 @@ void setup() {
     digitalWrite(PC13, HIGH);
 
 
+
     maxwell.setup();
     maxwell.init_pwm_3x();
-    maxwell.set_phase_voltages(-3, 0, 3);
+    // maxwell.set_phase_voltages(-3, 0, 3);
     // //
     // pwm_input.set_callback(pwm_callback);
     // maxwell.pwm_input = &pwm_input;

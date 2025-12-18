@@ -12,9 +12,6 @@ namespace Maxwell {
     #define MAX_SPEED 2000 // electrical rads/s
     Maxwell *Maxwell::instance = nullptr;
 
-
-
-
     Maxwell::Maxwell()  {
         SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
         SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
