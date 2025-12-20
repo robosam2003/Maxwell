@@ -28,6 +28,7 @@ public:
     virtual void update() = 0;
     virtual float get_angle() = 0; // in radians
     virtual float get_velocity() = 0; // in radians per second
+    virtual void set_offset(float angle) = 0;
 };
 
 

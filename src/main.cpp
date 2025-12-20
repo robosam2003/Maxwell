@@ -67,13 +67,11 @@ void setup() {
     maxwell.set_phase_voltages(0, 0, 0);
     // //
     // pwm_input.set_callback(pwm_callback);
-    // maxwell.pwm_input = &pwm_input;
     // maxwell.driver->perform_current_sense_calibration();
     // maxwell.driver->current_sensors->calibrate_offsets();
     maxwell.driver->clear_fault();
 
-    // maxwell.foc_init_sequence();
-    analogReadResolution(12);
+    maxwell.foc_init_sequence();
 }
 
 
@@ -82,16 +80,17 @@ void loop() {
     digitalToggle(GREEN_LED_PIN);
     //
     // delay(10);
-    maxwell.encoder->update();
-    Serial.println(maxwell.encoder->get_angle());
+    // maxwell.encoder->update();
+    // Serial.println(maxwell.encoder->get_angle());
 
+    // Serial.println(maxwell.pwm_input->read_percentage());
 
     // maxwell.sinusoidal_position_control();
     // maxwell.foc_position_control();
 
     // maxwell.voltage_position_control();
 
-    // maxwell.voltage_torque_control();
+    maxwell.voltage_torque_control();
     // maxwell.dc_current_torque_control();
     // maxwell.foc_current_torque_control();
 

@@ -22,11 +22,14 @@ class PWMInput {
 private:
     int _input_pin;
     INPUT_MODE _input_mode;
-    uint32_t prev_rise_time;
-    uint32_t prev_fall_time;
+    volatile uint32_t prev_rise_time = 0;
+    volatile uint32_t prev_fall_time = 0;
     float frequency;
     DIRECTION _direction;
     uint32_t _pwm_value;
+    TIM_TypeDef * TimerInstance;
+
+    HardwareTimer *PWMTimer;
 
 public:
     int _bottom_threshold = 1000;
@@ -40,7 +43,7 @@ public:
 
     uint32_t read();
 
-    uint32_t read_percentage();
+    float read_percentage();
 };
 
 

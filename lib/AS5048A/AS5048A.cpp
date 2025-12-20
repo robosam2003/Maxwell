@@ -70,7 +70,11 @@ void AS5048A::update() {
 }
 
 float AS5048A::get_angle() {
-    return absolute_angle;
+    // update();
+    if (_direction == CCW) {
+        return -absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
+    }
+    return absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
 }
 
 float AS5048A::get_velocity() {

@@ -3,6 +3,7 @@
 //
 
 #include "PWMInput.h"
+#include "stm32f4xx.h"
 
 PWMInput::PWMInput(int input_pin, INPUT_MODE input_mode, DIRECTION direction) {
     _input_pin = input_pin;
@@ -12,16 +13,15 @@ PWMInput::PWMInput(int input_pin, INPUT_MODE input_mode, DIRECTION direction) {
     prev_fall_time = micros();
     _pwm_value = 0;
 
-    // Set PC6 as PWM input capture mode
+    TimerInstance = (TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(_input_pin), PinMap_PWM);
+    uint32_t channel = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(_input_pin), PinMap_PWM));
 
-
-
-
-
-
-
-
-
+    PWMTimer = new HardwareTimer(TimerInstance);
+    PWMTimer->setMode(channel, TIMER_INPUT_CAPTURE_BOTHEDGE, _input_pin);
+    PWMTimer->attachInterrupt(channel,  [this] { pwm_callback(); }); // This will call every time there is a change on the pin
+    PWMTimer->setPrescaleFactor(1);
+    PWMTimer->setOverflow(0xFFFF); // Max overflow
+    PWMTimer->resume();
 
 }
 
@@ -40,16 +40,11 @@ void PWMInput::pwm_callback() {
     }
 }
 
-void PWMInput::set_callback(void (*interrupt_callback)()) {
-    attachInterrupt(digitalPinToInterrupt(_input_pin), interrupt_callback, CHANGE);
-}
-
-
 uint32_t PWMInput::read() {
     return _pwm_value;
 }
 
-uint32_t PWMInput::read_percentage() {
+float PWMInput::read_percentage() {
     _pwm_value = constrain(_pwm_value, _bottom_threshold, _top_threshold);
-    return map(_pwm_value, _bottom_threshold, _top_threshold, 0, 100);
+    return ((_pwm_value - _bottom_threshold) * 100.0f / (_top_threshold - _bottom_threshold));
 }

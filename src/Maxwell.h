@@ -134,8 +134,9 @@ namespace Maxwell {
         Currents* curr_struct;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 10;   // V
-        float max_current = 4;   // A
+        float max_voltage = 5;   // V
+        // float align_voltage = 2; // V
+        float max_current = 3;   // A
         float align_max_voltage = 1.5;
         float offset = 0.1; // V
 
@@ -158,6 +159,8 @@ namespace Maxwell {
         void set_phase_voltages(float Va, float Vb, float Vc);
 
         void set_phase_voltages(const dq_struct &command_dq);
+
+        void set_phase_voltages(const dq_struct &command_dq, float theta);
 
         void all_off();
 

@@ -39,7 +39,7 @@ public:
     void update() override;
     float get_angle() override; // in radians
     float get_velocity() override; // in radians per second
-    void set_offset(float angle);
+    void set_offset(float angle) override;
 };
 
 

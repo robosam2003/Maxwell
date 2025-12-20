@@ -27,6 +27,7 @@ namespace Maxwell {
             AS5047P_CS_PIN,
             SPI_1,
             1000000); // 1 MHz SPI frequency
+        pwm_input = new PWMInput(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
         trigger = new triggered{false, false, false};
         pid_controller = new PIDController(0.2, 2, 0,
@@ -333,6 +334,14 @@ namespace Maxwell {
                             command_voltages.current_c);
     }
 
+    void Maxwell::set_phase_voltages(const dq_struct &command_dq, float theta) {
+        alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta/POLE_PAIRS_6374);
+        PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
+        set_phase_voltages(command_voltages.current_a,
+                            command_voltages.current_b,
+                            command_voltages.current_c);
+    }
+
     void Maxwell::all_off() {
         set_pwm(0, 0, 0, pwm_3x->RESOLUTION);
     }
@@ -348,7 +357,8 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
         encoder->update();
         float zero_angle = encoder->get_angle();
-        float theta = 0;
+
+        float theta = _3PI_2;
         for (long i=0; i<60000; i++) {
             theta += 0.0001;
             theta = fmod(theta, _2PI);
@@ -358,10 +368,11 @@ namespace Maxwell {
                 send_frame(rotor_position_frame);
             }
             // Generate three sin waves, offset by 120 degrees
-            float U_a = _sin(theta)                * align_max_voltage/2;
-            float U_b = _sin(theta - 2*_PI_3) * align_max_voltage/2;
-            float U_c = _sin(theta + 2*_PI_3) * align_max_voltage/2;
-            set_phase_voltages(U_a, U_b, U_c);
+            // float U_a = _sin(theta)                * align_max_voltage/2;
+            // float U_b = _sin(theta - 2*_PI_3) * align_max_voltage/2;
+            // float U_c = _sin(theta + 2*_PI_3) * align_max_voltage/2;
+            // set_phase_voltages(U_a, U_b, U_c);
+            set_phase_voltages({0, align_max_voltage}, theta);
         }
         encoder->update();
         float top_angle = encoder->get_angle();
@@ -374,26 +385,22 @@ namespace Maxwell {
                 send_frame(rotor_position_frame);
             }
             // Generate three sin waves, offset by 120 degrees
-            float U_a = _sin(theta)                * align_max_voltage/2;
-            float U_b = _sin(theta - 2*_PI_3) * align_max_voltage/2;
-            float U_c = _sin(theta + 2*_PI_3) * align_max_voltage/2;
-            set_phase_voltages(U_a, U_b, U_c);
+            set_phase_voltages({0, align_max_voltage}, theta);
         }
         float bottom_angle = encoder->get_angle();
 
         // Calculate CW or CCW encoder configuration
-        // float diff = top_angle - zero_angle;
-        //
-        // if (diff > 0) {
-        //     encoder->set_direction(AS5047P::DIRECTION::CW);
-        // }
-        // else if (diff < 0) {
-        //     encoder->set_direction(AS5047P::DIRECTION::CCW);
-        //     digitalWrite(GREEN_LED_PIN, HIGH);
-        // }
-        // else {
-        //     Serial.println("DID NOT DETECT MOVEMENT");
-        // }
+        float diff = top_angle - zero_angle;
+
+        if (diff > 0) {
+            encoder->_direction = SENSOR_DIRECTION::CCW;
+        }
+        else if (diff < 0) {
+            encoder->_direction = SENSOR_DIRECTION::CW;
+        }
+        else {
+            Serial.println("DID NOT DETECT MOVEMENT");
+        }
 
         // Current sensor calibration:
         // set_phase_voltages(-0.75, 0, 0.75);
@@ -416,9 +423,10 @@ namespace Maxwell {
         //     send_frame(dq_frame);
         //     delay(5);
         // }
-        dq_struct align_dq = {2, 0};
-        set_phase_voltages(align_dq);
+        set_phase_voltages({0, align_max_voltage}, _3PI_2);
         delay(500);
+        encoder->update();
+        encoder->set_offset(encoder->get_angle());
 
         set_phase_voltages(0, 0, 0);
     }
@@ -492,7 +500,6 @@ namespace Maxwell {
             float U_q = pwm_input->read_percentage() / 100.0 * max_voltage;
             // U_q = -U_q;
 
-            encoder->update();
             float theta = encoder->get_angle();
 
             dq_struct command_dq = {0, U_q};
