@@ -48,6 +48,10 @@ controlConfig config = {
 
 // PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
+
+
+
+
 void setup() {
     Serial.begin(115200);
     Serial.println("Setup Start");
@@ -60,7 +64,7 @@ void setup() {
 
     maxwell.setup();
     maxwell.init_pwm_3x();
-    // maxwell.set_phase_voltages(-3, 0, 3);
+    maxwell.set_phase_voltages(0, 0, 0);
     // //
     // pwm_input.set_callback(pwm_callback);
     // maxwell.pwm_input = &pwm_input;
@@ -77,31 +81,9 @@ void setup() {
 void loop() {
     digitalToggle(GREEN_LED_PIN);
     //
-    delay(10);
-
-    maxwell.driver->set_pwm_mode(DRV8323::PWM_3x);
-    Serial.println(maxwell.driver->read_reg(DRV8323::REGISTER::DRIVER_CONTROL));
-    Serial.println(maxwell.driver->get_fault_status_1_string());
-    Serial.println(maxwell.driver->get_fault_status_2_string());
-    Serial.println();
-
-
-    // Serial.println(maxwell.driver->read_reg(DRV8323::REGISTER::GATE_DRIVE_HS));
-    // Serial.println(maxwell.driver->read_reg(DRV8323::REGISTER::GATE_DRIVE_LS));
-    // Serial.println(maxwell.driver->read_reg(DRV8323::REGISTER::DRIVER_CONTROL));
-
-
-
-    // Serial.println(driver.read_reg(DRV8323::REGISTER::GATE_DRIVE_HS));
-    // Serial.println(driver.read_reg(DRV8323::REGISTER::GATE_DRIVE_LS));
-    // Serial.println(driver.read_reg(DRV8323::REGISTER::DRIVER_CONTROL));
-    // Serial.println(driver.read_reg(DRV8323::REGISTER::CSA_CONTROL));
-
-    // char strbuf[50]; sprintf(strbuf, "%lu, %lu, %lu",
-    //                         analogRead(CURR_SENSE_A_PIN),
-    //                         analogRead(CURR_SENSE_B_PIN),
-    //                         analogRead(CURR_SENSE_C_PIN));
-    // Serial.println(strbuf);
+    // delay(10);
+    maxwell.encoder->update();
+    Serial.println(maxwell.encoder->get_angle());
 
 
     // maxwell.sinusoidal_position_control();
@@ -123,10 +105,6 @@ void loop() {
     // Serial.println(maxwell.driver->get_fault_status_1_string());
 
     // maxwell.voltage_position_control();
-
-
-
-
 
     // maxwell.encoder->update();
     // maxwell.rotor_position_frame.values = {maxwell.encoder->get_angle()};

@@ -23,10 +23,10 @@ namespace Maxwell {
             DRV8323_HI_B_PIN,
             DRV8323_HI_C_PIN,
             DRV8323_GATE_EN_PIN);
-        encoder = new AS5047P::AS5047P(
+        encoder = new AS5048A (
             AS5047P_CS_PIN,
-            SPI_2,
-            20000000);
+            SPI_1,
+            1000000); // 1 MHz SPI frequency
 
         trigger = new triggered{false, false, false};
         pid_controller = new PIDController(0.2, 2, 0,

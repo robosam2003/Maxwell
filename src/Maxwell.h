@@ -7,7 +7,10 @@
 
 #include <pin_definitions.h>
 #include "DRV8323.h"
-#include "AS5047P.h"
+// #include "AS5047P.h"
+#include "PositionSensor.h"
+#include "AS5048A.h"
+
 // #include "FreeRTOS.h"
 // #include "task.h"
 #include "HallSensor.h"
@@ -124,7 +127,7 @@ namespace Maxwell {
 
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
-        AS5047P::AS5047P* encoder;
+        PositionSensor* encoder;
         PIDController* pid_controller; // for hall mode
         triggered* trigger;
         PWMInput* pwm_input;
