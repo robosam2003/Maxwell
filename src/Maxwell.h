@@ -18,6 +18,8 @@
 #include "PWMInput.h"
 #include "current_sensors.h"
 #include "maxwell_utils.h"
+#include "TelemetryTarget.h"
+#include "USBTarget.h"
 
 
 namespace Maxwell {
@@ -83,55 +85,57 @@ namespace Maxwell {
     class Maxwell {
     public:
 
-        float_frame command_voltage_frame = {
-            .name = "Command Voltage",
-            .values = {0.0, 0.0, 0.0}
-        };
-        float_frame phase_current_frame = {
-            .name = "Phase Current",
-            .values = {0.0, 0.0, 0.0}
-        };
-        float_frame rotor_position_frame = {
-            .name = "Rotor Position",
-            .values = {0.0}
-        };
-        float_frame rotor_velocity_frame = {
-            .name = "Rotor Velocity",
-            .values = {0.0}
-        };
-        // float_frame
-        // float_frame
-        string_frame nameset_frame = {
-            .name = "Nameset",
-            .values = {}
-        };
+        // float_frame command_voltage_frame = {
+        //     .name = "Command Voltage",
+        //     .values = {0.0, 0.0, 0.0}
+        // };
+        // float_frame phase_current_frame = {
+        //     .name = "Phase Current",
+        //     .values = {0.0, 0.0, 0.0}
+        // };
+        // float_frame rotor_position_frame = {
+        //     .name = "Rotor Position",
+        //     .values = {0.0}
+        // };
+        // float_frame rotor_velocity_frame = {
+        //     .name = "Rotor Velocity",
+        //     .values = {0.0}
+        // };
+        // // float_frame
+        // // float_frame
+        // string_frame nameset_frame = {
+        //     .name = "Nameset",
+        //     .values = {}
+        // };
+        //
+        // float_frame alpha_beta_frame = {
+        //     .name = "Alpha-Beta",
+        //     .values = {0.0, 0.0}
+        // };
+        // float_frame dq_frame = {
+        //     .name = "dq",
+        //     .values = {0.0, 0.0}
+        // };
+        // float_frame command_dq_frame = {
+        //     .name = "command dq",
+        //     .values = {0.0, 0.0}
+        // };
+        // float_frame command_alpha_beta_frame = {
+        //     .name = "command alpha-beta",
+        //     .values = {0.0, 0.0}
+        // };
 
-        float_frame alpha_beta_frame = {
-            .name = "Alpha-Beta",
-            .values = {0.0, 0.0}
-        };
-        float_frame dq_frame = {
-            .name = "dq",
-            .values = {0.0, 0.0}
-        };
-        float_frame command_dq_frame = {
-            .name = "command dq",
-            .values = {0.0, 0.0}
-        };
-        float_frame command_alpha_beta_frame = {
-            .name = "command alpha-beta",
-            .values = {0.0, 0.0}
-        };
-
-
+        TelemetryTarget* telemetry;
 
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
         PositionSensor* encoder;
+        CurrentSensors* current_sensors;
+
         PIDController* pid_controller; // for hall mode
         triggered* trigger;
         PWMInput* pwm_input;
-        Currents* curr_struct;
+
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
         float max_voltage = 5;   // V
@@ -139,6 +143,7 @@ namespace Maxwell {
         float max_current = 3;   // A
         float align_max_voltage = 1.5;
         float offset = 0.1; // V
+        int _csa_gain = 20;
 
         static Maxwell* instance;
 

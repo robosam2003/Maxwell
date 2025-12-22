@@ -13,6 +13,9 @@ namespace Maxwell {
     Maxwell *Maxwell::instance = nullptr;
 
     Maxwell::Maxwell()  {
+        telemetry = new USBTarget();
+        telemetry->initialize();
+
         SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
         SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
         driver = new DRV8323::DRV8323(
@@ -34,9 +37,10 @@ namespace Maxwell {
             0,
             static_cast<float>(MAX_LEVEL),
             30);
-
-
-        curr_struct = new Currents{0, 0, 0, 0, 0, 0, 0};
+        current_sensors = new CurrentSensors(CURR_SENSE_A_PIN,
+                                            CURR_SENSE_B_PIN,
+                                            CURR_SENSE_C_PIN,
+                                            _csa_gain);
 
         pwm_3x = new pwm_3x_struct();
         pwm_3x->PIN_A_STATE = 0; pwm_3x->PIN_B_STATE = 0; pwm_3x->PIN_C_STATE = 0;
@@ -364,14 +368,8 @@ namespace Maxwell {
             theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
-                rotor_position_frame.values = {encoder->get_angle()};
-                send_frame(rotor_position_frame);
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
             }
-            // Generate three sin waves, offset by 120 degrees
-            // float U_a = _sin(theta)                * align_max_voltage/2;
-            // float U_b = _sin(theta - 2*_PI_3) * align_max_voltage/2;
-            // float U_c = _sin(theta + 2*_PI_3) * align_max_voltage/2;
-            // set_phase_voltages(U_a, U_b, U_c);
             set_phase_voltages({0, align_max_voltage}, theta);
         }
         encoder->update();
@@ -381,10 +379,8 @@ namespace Maxwell {
             theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
-                rotor_position_frame.values = {encoder->get_angle()};
-                send_frame(rotor_position_frame);
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
             }
-            // Generate three sin waves, offset by 120 degrees
             set_phase_voltages({0, align_max_voltage}, theta);
         }
         float bottom_angle = encoder->get_angle();
@@ -405,10 +401,10 @@ namespace Maxwell {
         // Current sensor calibration:
         // set_phase_voltages(-0.75, 0, 0.75);
         // for (int i=0; i<500; i++) {
-        //     driver->current_sensors->read();
-        //     double currents[3] = {driver->current_sensors->get_current_a(),
-        //                             driver->current_sensors->get_current_b(),
-        //                             driver->current_sensors->get_current_c()};
+        //     current_sensors->read();
+        //     double currents[3] = {current_sensors->get_current_a(),
+        //                             current_sensors->get_current_b(),
+        //                             current_sensors->get_current_c()};
         //     alpha_beta_struct ab_vec = clarke_transform(
         //         PhaseCurrents{static_cast<float>(currents[0]),
         //                         static_cast<float>(currents[1]),
@@ -465,12 +461,12 @@ namespace Maxwell {
             // if (i% 1000 == 0) Serial.println(U_b);
 
             set_phase_voltages(U_a, U_b, U_c);
-            // double* currents = driver->current_sensors->get_currents();
+            // double* currents = current_sensors->get_currents();
             if (i % 1500 == 0) {
-                // driver->current_sensors->read();
-                double currents[3] = {driver->current_sensors->get_current_a(),
-                                        driver->current_sensors->get_current_b(),
-                                        driver->current_sensors->get_current_c()};
+                // current_sensors->read();
+                double currents[3] = {current_sensors->get_current_a(),
+                                        current_sensors->get_current_b(),
+                                        current_sensors->get_current_c()};
                 double average = (currents[0] + currents[1] + currents[2]) / 3;
                 double rel_currents[3] = {
                     (currents[0] - average),
@@ -505,40 +501,27 @@ namespace Maxwell {
             dq_struct command_dq = {0, U_q};
             set_phase_voltages(command_dq);
 
-            uint32_t current_time = millis();
-#ifdef SERIAL_FEEDBACK_ENABLED
-            if (current_time - prev_millis >= 30) { // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
-                driver->current_sensors->read();
-                double currents[3] = {driver->current_sensors->get_current_a(),
-                                     driver->current_sensors->get_current_b(),
-                                     driver->current_sensors->get_current_c()};
-                PhaseCurrents phase_currents = {static_cast<float>(currents[0]),
-                                                static_cast<float>(currents[1]),
-                                                static_cast<float>(currents[2])};
-                encoder->update();
-                float theta = encoder->get_angle();
 
-                alpha_beta_struct ab_vec = clarke_transform(phase_currents);
-                dq_struct dq_vec = park_transform(ab_vec, theta);
-                command_voltage_frame.values = {v_a, v_b, v_c};
+        uint32_t current_time = millis();
 
-                phase_current_frame.values = {currents[0], currents[1], currents[2]};
-                                // sqrt(ab_vec.alpha*ab_vec.alpha + ab_vec.beta*ab_vec.beta)};
-                rotor_position_frame.values = {theta};
-                rotor_velocity_frame.values = {encoder->get_velocity()};
-                alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
-                dq_frame.values = {dq_vec.d, dq_vec.q};
-                send_frame(rotor_position_frame);
-                send_frame(phase_current_frame);
-                send_frame(alpha_beta_frame);
-                send_frame(dq_frame);
-                // send_frame(command_voltage_frame);
-                // Serial.print(currents[0]); Serial.print(" ");
-                // Serial.print(currents[1]); Serial.print(" ");
-                // Serial.println(currents[2]);
-                prev_millis = current_time;
-            }
-#endif
+        if (current_time - prev_millis >= 30) { // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
+            // current_sensors->read();
+            double currents[3] = {current_sensors->get_current_a(),
+                                 current_sensors->get_current_b(),
+                                 current_sensors->get_current_c()};
+
+            encoder->update();
+            telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
+            telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {encoder->get_velocity()}});
+            telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(currents[0]),
+                                                                                    static_cast<float>(currents[1]),
+                                                                                    static_cast<float>(currents[2])}});
+
+
+
+
+            prev_millis = current_time;
+        }
         }
 
     }
@@ -626,10 +609,10 @@ namespace Maxwell {
 
             if (current_time_ms - prev_millis >= 30) {
                 // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
-                driver->current_sensors->read();
-                double currents[3] = {driver->current_sensors->get_current_a(),
-                                     driver->current_sensors->get_current_b(),
-                                     driver->current_sensors->get_current_c()};
+                current_sensors->read();
+                double currents[3] = {current_sensors->get_current_a(),
+                                     current_sensors->get_current_b(),
+                                     current_sensors->get_current_c()};
                 PhaseCurrents phase_currents = {static_cast<float>(currents[0]),
                                                 static_cast<float>(currents[1]),
                                                 static_cast<float>(currents[2])};
@@ -638,14 +621,14 @@ namespace Maxwell {
                 dq_struct dq_vec = park_transform(ab_vec, rotor_theta);
                 // command_voltage_frame.values = {v_a, v_b, v_c};
 
-                phase_current_frame.values = {currents[0], currents[1], currents[2]};
-                rotor_position_frame.values = {desired_angle ,rotor_theta};
-                rotor_velocity_frame.values = {desired_velocity, rotor_velocity};
+                // phase_current_frame.values = {currents[0], currents[1], currents[2]};
+                // rotor_position_frame.values = {desired_angle ,rotor_theta};
+                // rotor_velocity_frame.values = {desired_velocity, rotor_velocity};
                 // alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
                 // dq_frame.values = {dq_vec.d, dq_vec.q};
-                send_frame(rotor_position_frame);
-                send_frame(rotor_velocity_frame);
-                send_frame(phase_current_frame);
+                // send_frame(rotor_position_frame);
+                // send_frame(rotor_velocity_frame);
+                // send_frame(phase_current_frame);
                 // send_frame(alpha_beta_frame);
                 // send_frame(dq_frame);
                 // send_frame(command_voltage_frame);
@@ -691,11 +674,11 @@ namespace Maxwell {
             encoder->update();
             float theta = encoder->get_angle();
 
-            driver->current_sensors->read();
+            current_sensors->read();
             PhaseCurrents currents = {
-                driver->current_sensors->get_current_a(),
-                driver->current_sensors->get_current_b(),
-                driver->current_sensors->get_current_c()
+                current_sensors->get_current_a(),
+                current_sensors->get_current_b(),
+                current_sensors->get_current_c()
             };
             alpha_beta_struct ab_vec = clarke_transform(currents);
             dq_struct dq_meas = park_transform(ab_vec, theta);
@@ -844,11 +827,11 @@ namespace Maxwell {
             q_pid_controller.set_setpoint(I_q);
 
 
-            driver->current_sensors->read();
+            current_sensors->read();
             PhaseCurrents currents = {
-                driver->current_sensors->get_current_a(),
-                driver->current_sensors->get_current_b(),
-                driver->current_sensors->get_current_c()
+                current_sensors->get_current_a(),
+                current_sensors->get_current_b(),
+                current_sensors->get_current_c()
             };
             alpha_beta_struct ab_vec = clarke_transform(currents);
             dq_struct dq_meas = park_transform(ab_vec, theta);
@@ -871,27 +854,27 @@ namespace Maxwell {
 
             if (current_time_ms - prev_millis >= 100) {
                 // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
-                phase_current_frame.values = {currents.current_a,
-                                            currents.current_b,
-                                            currents.current_c};
-
-                alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
-                dq_frame.values = {dq_meas.d, dq_meas.q, command_dq.d, command_dq.q, I_q};
-                command_voltage_frame.values = {command_voltages.current_a,
-                                                    command_voltages.current_b,
-                                                    command_voltages.current_c};
-
-                rotor_position_frame.values = {desired_angle, theta};
-                rotor_velocity_frame.values = {vel_ref, rotor_velocity};
-
-                send_frame(phase_current_frame);
-                // send_frame(alpha_beta_frame);
-                send_frame(dq_frame);
+                // phase_current_frame.values = {currents.current_a,
+                //                             currents.current_b,
+                //                             currents.current_c};
+                //
+                // alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
+                // dq_frame.values = {dq_meas.d, dq_meas.q, command_dq.d, command_dq.q, I_q};
+                // command_voltage_frame.values = {command_voltages.current_a,
+                //                                     command_voltages.current_b,
+                //                                     command_voltages.current_c};
+                //
+                // rotor_position_frame.values = {desired_angle, theta};
+                // rotor_velocity_frame.values = {vel_ref, rotor_velocity};
+                //
                 // send_frame(phase_current_frame);
-
-                // q_pid_controller.print_state();
-                send_frame(rotor_position_frame);
-                send_frame(rotor_velocity_frame);
+                // // send_frame(alpha_beta_frame);
+                // send_frame(dq_frame);
+                // // send_frame(phase_current_frame);
+                //
+                // // q_pid_controller.print_state();
+                // send_frame(rotor_position_frame);
+                // send_frame(rotor_velocity_frame);
                 // send_frame(command_voltage_frame);
                 prev_millis = current_time_ms;
             }
@@ -907,7 +890,6 @@ namespace Maxwell {
         float I_beta = (currents.current_b - currents.current_c) / _SQRT3;
 
         alpha_beta_struct ab = {I_alpha, I_beta};
-        curr_struct->alpha_beta = ab;
         return ab;
     }
 
@@ -927,7 +909,6 @@ namespace Maxwell {
         float alpha = dq_vec.d * c - dq_vec.q * s;
         float beta  = dq_vec.d * s + dq_vec.q * c;
         alpha_beta_struct alpha_beta = {alpha, beta};
-        curr_struct->alpha_beta = alpha_beta;
         return alpha_beta;
     }
 
@@ -939,7 +920,6 @@ namespace Maxwell {
         currents.current_a = ab_vec.alpha;
         currents.current_b = (-ab_vec.alpha + M_SQRT3*ab_vec.beta) / 2;
         currents.current_c = (-ab_vec.alpha - M_SQRT3*ab_vec.beta) / 2;
-        curr_struct->phase_currents = currents;
         return currents;
     }
 
@@ -978,7 +958,7 @@ namespace Maxwell {
         uint32_t start = millis();
         bool aligned = false;
         int8_t old_rotor_sector = hall_sensor->rotor_sector;
-        driver->current_sensors->calibrate_offsets();
+        current_sensors->calibrate_offsets();
 
         while (true) {
             if (pwm_input->read_percentage() > 5) {

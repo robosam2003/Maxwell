@@ -31,15 +31,9 @@
 
 
 
-struct float_frame {
-  String name;
-  std::vector<double> values;
-};
 
-struct string_frame {
-  String name;
-  std::vector<String> values;
-};
+
+
 
 inline int calcuate_checksum(String text) {
   // calculate checksum
@@ -49,38 +43,6 @@ inline int calcuate_checksum(String text) {
   }
   checksum = checksum % 256;
   return checksum;
-}
-
-inline void send_frame(float_frame& frame) {
-  String frame_string = "";
-  frame_string += frame.name; frame_string += "/";
-  for (auto value : frame.values) {
-    frame_string += String(value); frame_string += "/";
-  }
-
-  int checksum = calcuate_checksum(frame_string);
-  frame_string += "|";
-  frame_string += String(checksum);
-  Serial.println(frame_string);
-}
-
-inline void send_name_frame(string_frame& frame) {
-
-}
-
-inline void send_frame(string_frame& frame, bool nameset=false) {
-  String frame_string = "";
-  if (nameset) frame_string += "NAMESET";
-
-  frame_string += frame.name; frame_string += "/";
-  for (auto value : frame.values) {
-    frame_string += value; frame_string += "/";
-  }
-
-  int checksum = calcuate_checksum(frame_string);
-  frame_string += "|";
-  frame_string += String(checksum);
-  Serial.println(frame_string);
 }
 
 

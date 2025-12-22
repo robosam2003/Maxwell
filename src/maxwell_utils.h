@@ -26,9 +26,13 @@
  *      DC
  *  command_source | Where to read the reference from
  *      PWM
+ *      USB
  *      UART
  *      CAN
- *
+ *  telemetry_destination | Where to send telemetry data to
+ *    UART
+ *    CAN
+ *    USB
  */
 
 enum CONTROL_MODE {
@@ -59,6 +63,12 @@ enum COMMAND_SOURCE {
     UART,
     CAN,
     USB
+};
+
+enum TELEMETRY_DESTINATION {
+    TELEMETRY_UART,
+    TELEMETRY_CAN,
+    TELEMETRY_USB
 };
 
 struct sensorTypeSchema {
@@ -97,8 +107,7 @@ struct controlConfig {
     TORQUE_CONTROL_MODE torque_control_mode;
     MOTOR_TYPE motor_type;
     COMMAND_SOURCE command_source;
-
-
+    TELEMETRY_DESTINATION telemetry_destination;
 };
 
 

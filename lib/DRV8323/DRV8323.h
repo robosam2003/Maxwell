@@ -44,7 +44,6 @@ public:
     bool enabled = false;
 
     CSA_GAIN _csa_gain = CSA_GAIN::GAIN_40_V_V;
-    CurrentSensors* current_sensors;
     // Constructor
     DRV8323(byte CS, SPIClass& spi, uint32_t spiFreq, uint8_t pin_a, uint8_t pin_b, uint8_t pin_c, byte gate_enable_pin);
 

@@ -5,7 +5,7 @@
 #include "current_sensors.h"
 #
 
-CurrentSensors::CurrentSensors(uint32_t pin_a, uint32_t pin_b, uint32_t pin_c, DRV8323::CSA_GAIN gain) {
+CurrentSensors::CurrentSensors(uint32_t pin_a, uint32_t pin_b, uint32_t pin_c, int gain) {
     _pin_a = pin_a;
     _pin_b = pin_b;
     _pin_c = pin_c;
@@ -25,10 +25,10 @@ CurrentSensors::CurrentSensors(uint32_t pin_a, uint32_t pin_b, uint32_t pin_c, D
     _csa_gain = gain;
     hadc1 = new ADC_HandleTypeDef();
 
-    // analogReadResolution(12);
+    analogReadResolution(12);
 
 
-    setup_injected_adc();
+    // setup_injected_adc();
 }
 
 void CurrentSensors::setup_injected_adc() {
@@ -39,9 +39,9 @@ void CurrentSensors::setup_injected_adc() {
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
-    pinMode(_pin_a, INPUT_ANALOG); // PB_0 - ADC1_IN8
-    pinMode(_pin_b, INPUT_ANALOG); // PC_5 - ADC1_IN15
-    pinMode(_pin_c, INPUT_ANALOG); // PC_4 - ADC1_IN14
+    pinMode(_pin_a, INPUT_ANALOG); // PA2 - ADC3_IN2
+    pinMode(_pin_b, INPUT_ANALOG); // PA1 - ADC2_IN1
+    pinMode(_pin_c, INPUT_ANALOG); // PA0 - ADC0_IN0
 
     hadc1->Instance = ADC1;
     hadc1->Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV6;
@@ -106,7 +106,7 @@ void CurrentSensors::setup_injected_adc() {
     Serial.println("SUCCESSFULLY SETUP INJECTED ADC");
 }
 
-void CurrentSensors::set_csa_gain(DRV8323::CSA_GAIN gain) {
+void CurrentSensors::set_csa_gain(int gain) {
   _csa_gain = gain;
 }
 
@@ -154,9 +154,9 @@ void CurrentSensors::read() {
   // _current_a = v_a;
   // _current_b = v_b;
   // _current_c = v_c;
-  float a_calc = (3.3/2 - v_a) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) + ((inverted) ? _offset_a : -_offset_a);
-  float b_calc = (3.3/2 - v_b) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) + ((inverted) ? _offset_b : -_offset_b);
-  float c_calc = (3.3/2 - v_c) / (DRV8323::csa_gain_to_int[_csa_gain] * R_SENSE) + ((inverted) ? _offset_c : -_offset_c);
+  float a_calc = (3.3/2 - v_a) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_a : -_offset_a);
+  float b_calc = (3.3/2 - v_b) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_b : -_offset_b);
+  float c_calc = (3.3/2 - v_c) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_c : -_offset_c);
 
   // Invert things
   (inverted) ? (a_calc *= -1, b_calc *= -1, c_calc *= -1) : 0;
@@ -177,15 +177,18 @@ void CurrentSensors::read() {
 
 
 double CurrentSensors::get_current_a() {
-  return _current_a; // analogRead(_pin_a) * CURRENT_SENSE_CONVERSION_FACTOR;
+  v_a = analogRead(_pin_a) * CURRENT_SENSE_CONVERSION_FACTOR;
+  return (3.3/2 - v_a) / (_csa_gain * R_SENSE);
 }
 
 double CurrentSensors::get_current_b() {
-  return _current_b; // analogRead(_pin_b) * CURRENT_SENSE_CONVERSION_FACTOR;
+  v_b = analogRead(_pin_b) * CURRENT_SENSE_CONVERSION_FACTOR;
+  return (3.3/2 - v_b) / (_csa_gain * R_SENSE);
 }
 
 double CurrentSensors::get_current_c() {
-  return _current_c; // analogRead(_pin_c) * CURRENT_SENSE_CONVERSION_FACTOR;
+  v_c = analogRead(_pin_c) * CURRENT_SENSE_CONVERSION_FACTOR;
+  return (3.3/2 - v_c) / (_csa_gain * R_SENSE);
 }
 
 double* CurrentSensors::get_currents() {

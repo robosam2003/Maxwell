@@ -14,9 +14,11 @@ from PySide6.QtCore import Slot
 from PySide6.QtCore import Qt
 
 import pyqtgraph as pg
+from typing import List
 
 import maxwellstudio_ui
 import serial
+import struct
 import time
 from dataclasses import dataclass
 
@@ -34,15 +36,27 @@ pens = [
     ]
 
 
+TELEMETRY_PACKET_TYPE = {
+    0: 'GENERAL',
+    1: 'Rotor Position',
+    2: 'Rotor Velocity',
+    3: 'Phase Currents',
+    4: 'A-B Currents',
+    5: 'DQ Currents',
+    6: 'Bus Voltage'
+}
+
+
+
 
 @dataclass
 class Frame:
     name: str
-    sample_queue: deque[float]
-    data_names: list[str]
-    data_queues: list[deque[float]]
+    sample_queue:   deque[float]
+    data_names:     List[str]
+    data_queues:    List[deque[float]]
 
-    def __init__(self, name: str, data: list[deque[float]]):
+    def __init__(self, name: str, data: List[deque[float]]):
         self.name = name
         self.sample_queue = deque(maxlen=BUFFER_SIZE)
         self.data_queues = data
@@ -57,7 +71,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         super(MaxwellStudio, self).__init__(parent)
         self.setupUi(self)
 
-        self.ser = serial.Serial('/dev/MAXWELL', 921600)
+        self.ser = serial.Serial('COM6', 921600)
 
         self.frames = []
         self.plots = [self.plot1, self.plot2, self.plot3, self.plot4]
@@ -80,9 +94,6 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         self.update_thread = QThread()
         self.update_thread.run = self.update
         self.update_thread.start()
-        # self.update_serial_timer = QTimer()
-        # self.update_serial_timer.timeout.connect(self.update)
-        # self.update_serial_timer.start(10)
 
         self.update_plots_timer = QTimer()
         self.update_plots_timer.timeout.connect(self.update_plots)
@@ -132,56 +143,54 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
             combobox.currentIndexChanged.connect(lambda x, index=i: self.combobox_changed(index))
 
         # clear buffers
-
         self.start_time = time.time()
 
     def update(self):
         while True:
+            QApplication.processEvents()
             try:
-                # Example line: Measured Current/1.00/2.00/3.10/|178
-                line = self.ser.readline().decode('utf-8').strip()
-                # print(line)
-                split1 = line.split('|')
-                if len(split1) != 2:
-                    print(f'Invalid line: {line}')
-                    continue
-                if not self.check_checksum(line):
-                    continue
-                # Split into name and data
-                split2 = split1[0].split('/')[:-1]
-                name = split2[0]
-                data = split2[1:]
+                line = self.ser.readline()
+                # Print line in hex - bytearray
+                # print(line.strip().hex())
+                # interpret as uint8 values
+                uint8_raw_values = [b for b in line.strip()]
+                packet_type = uint8_raw_values[0]
+                float_values = []
+                for b in range(len(uint8_raw_values[1:])//4):
+                    float_bytes = bytes(uint8_raw_values[1 + b*4: 1 + (b+1)*4])
+                    float_values.append(struct.unpack('f', float_bytes)[0])
+                name = TELEMETRY_PACKET_TYPE.get(packet_type, f'UNKNOWN_{packet_type}')
 
                 # Set data names
-                if name.startswith('NAMESET'):
-                    name = name[7:]
-                    for frame in self.frames:
-                        if frame.name == name: # Frame already exists
-                            frame.data_names = data # Set new data names
-                            break
-                    else: # New frame
-                        data_names = data
-                        data = [deque(maxlen=BUFFER_SIZE) for _ in range(len(data_names))]
-                        self.frames.append(Frame(name, data))
-                        for combobox in self.comboboxes:
-                            combobox.addItem(name)
-                else: # regular frame
-                    data = [float(x) for x in data]
-                    for frame in self.frames:
-                        if frame.name == name:
-                            # Increment sample number
-                            frame.sample_queue.append(time.time() - self.start_time)
-                            for i, d in enumerate(data):
-                                frame.data_queues[i].append(d)
-                            break
-                    else: # New frame
-                        new_frame = Frame(name, [deque(maxlen=BUFFER_SIZE) for _ in range(len(data))])
-                        new_frame.sample_queue.append(time.time() - self.start_time)
+                # if name.startswith('NAMESET'):
+                #     name = name[7:]
+                #     for frame in self.frames:
+                #         if frame.name == name: # Frame already exists
+                #             frame.data_names = data # Set new data names
+                #             break
+                #     else: # New frame
+                #         data_names = data
+                #         data = [deque(maxlen=BUFFER_SIZE) for _ in range(len(data_names))]
+                #         self.frames.append(Frame(name, data))
+                #         for combobox in self.comboboxes:
+                #             combobox.addItem(name)
+
+                data = [float(x) for x in float_values]
+                for frame in self.frames:
+                    if frame.name == name:
+                        # Increment sample number
+                        frame.sample_queue.append(time.time() - self.start_time)
                         for i, d in enumerate(data):
-                            new_frame.data_queues[i].append(d)
-                        self.frames.append(new_frame)
-                        for combobox in self.comboboxes:
-                            combobox.addItem(name)
+                            frame.data_queues[i].append(d)
+                        break
+                else: # New frame
+                    new_frame = Frame(name, [deque(maxlen=BUFFER_SIZE) for _ in range(len(data))])
+                    new_frame.sample_queue.append(time.time() - self.start_time)
+                    for i, d in enumerate(data):
+                        new_frame.data_queues[i].append(d)
+                    self.frames.append(new_frame)
+                    for combobox in self.comboboxes:
+                        combobox.addItem(name)
 
 
             # Exception Handling
@@ -201,8 +210,6 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
                 # send Qsignal to reset
                 self.reset_signal.emit()
-
-
                 break
             except serial.SerialException as e:
                 print(f'Failed to reconnect: {e}')
@@ -243,7 +250,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 def main():
     app = QApplication(sys.argv)
     window = MaxwellStudio()
-    window.show()
-    sys.exit(app.exec_())
+    window.showMaximized()
+    sys.exit(app.exec())
 
 main()

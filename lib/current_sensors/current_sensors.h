@@ -25,7 +25,7 @@ private:
     RCFilter* _filter_a;
     RCFilter* _filter_b;
     RCFilter* _filter_c;
-    DRV8323::CSA_GAIN _csa_gain;
+    int _csa_gain;
 	ADC_HandleTypeDef* hadc1;
 
 
@@ -37,16 +37,16 @@ public:
     double _current_b;
     double _current_c;
 	bool filtered = false;
-	bool inverted = true;
+	bool inverted = false;
 
     explicit CurrentSensors(uint32_t pin_a,
                           uint32_t pin_b,
                           uint32_t pin_c,
-                          DRV8323::CSA_GAIN gain);
+                          int gain);
 
     void setup_injected_adc();
 
-    void set_csa_gain(DRV8323::CSA_GAIN gain);
+    void set_csa_gain(int gain);
 
     void calibrate_offsets();
 

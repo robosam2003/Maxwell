@@ -52,11 +52,6 @@ namespace DRV8323 {
 
         // Begin the SPI bus.
         _spi.begin();
-
-        // current_sensors = new CurrentSensors(CURR_SENSE_A_PIN,
-        //                                     CURR_SENSE_B_PIN,
-        //                                     CURR_SENSE_C_PIN,
-        //                                     _csa_gain);
     }
 
     void DRV8323::enable(bool enable) {
@@ -202,7 +197,7 @@ namespace DRV8323 {
         data = data & 0b11100111111; // Mask the CSA_GAIN bits
         data = data | (gain << 6);   // Set the CSA_GAIN bits
         write_reg(REGISTER::CSA_CONTROL, data);
-        current_sensors->set_csa_gain(gain);
+        // current_sensors->set_csa_gain(gain);
     }
 
     void DRV8323::enable_csa_fet(bool enable) {

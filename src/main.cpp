@@ -31,92 +31,47 @@ void loop() {
 //
 #include "pin_definitions.h"
 #include "Maxwell.h"
-// #include "PWMInput.h"
-#include "stm32f4xx_hal_uart.h"
+
+#include "stm32f4xx.h"
 #include <cstring> // For strlen
 
 Maxwell::Maxwell maxwell;
-
+#define SERIAL_FEEDBACK_ENABLED
 
 controlConfig config = {
     CONTROL_MODE::POSITION,
     SENSOR_TYPE::MAGNETIC,
     TORQUE_CONTROL_MODE::VOLTAGE,
     MOTOR_TYPE::BLDC,
-    COMMAND_SOURCE::PWM
+    COMMAND_SOURCE::PWM,
+    TELEMETRY_DESTINATION::TELEMETRY_USB
 };
 
-// PWMInput pwm_input(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
-
-
-
-
+uint8_t buffer[3];
 
 void setup() {
-    Serial.begin(115200);
-    Serial.println("Setup Start");
     pinMode(GREEN_LED_PIN, OUTPUT);
 
     pinMode(PC13, OUTPUT);
     digitalWrite(PC13, HIGH);
-
-
 
     maxwell.setup();
     maxwell.init_pwm_3x();
     maxwell.set_phase_voltages(0, 0, 0);
     // //
     // pwm_input.set_callback(pwm_callback);
-    // maxwell.driver->perform_current_sense_calibration();
-    // maxwell.driver->current_sensors->calibrate_offsets();
+    // maxwell.current_sensors->calibrate_offsets();
     maxwell.driver->clear_fault();
 
     maxwell.foc_init_sequence();
 }
 
 
-
 void loop() {
     digitalToggle(GREEN_LED_PIN);
-    //
+    // maxwell.telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {1.234f, 3.1415f, 2.718f}});
     // delay(10);
-    // maxwell.encoder->update();
-    // Serial.println(maxwell.encoder->get_angle());
-
-    // Serial.println(maxwell.pwm_input->read_percentage());
-
-    // maxwell.sinusoidal_position_control();
-    // maxwell.foc_position_control();
-
-    // maxwell.voltage_position_control();
-
     maxwell.voltage_torque_control();
-    // maxwell.dc_current_torque_control();
-    // maxwell.foc_current_torque_control();
-
-
-    // Blink
-    // digitalWrite(GREEN_LED_PIN, HIGH);
-    // delay(100);
-    // digitalWrite(GREEN_LED_PIN, LOW);
-    // delay(100);
-
-    // Serial.println(maxwell.driver->get_fault_status_1_string());
-
-    // maxwell.voltage_position_control();
-
-    // maxwell.encoder->update();
-    // maxwell.rotor_position_frame.values = {maxwell.encoder->get_angle()};
-    // send_frame(maxwell.rotor_position_frame);
-    // Serial.println(maxwell.encoder->get_angle());
-    // delay(10);
-
-    // maxwell.foc_current_torque_control();
-
-    // Serial.println(maxwell.encoder->get_angle());
-    // delay(10);
-    // Serial.println(maxwell.driver->get_fault_status_1_string());
-    // Serial.println(maxwell.driver->get_fault_status_2_string());
 
 }
 #endif
