@@ -43,7 +43,8 @@ TELEMETRY_PACKET_TYPE = {
     3: 'Phase Currents',
     4: 'A-B Currents',
     5: 'DQ Currents',
-    6: 'Bus Voltage'
+    6: 'Bus Voltage',
+    7: 'Command Voltages'
 }
 
 
@@ -63,6 +64,86 @@ class Frame:
         self.data_names = [''] * len(data)
 
 
+# Serial worker that runs in its own thread and emits parsed packets
+class SerialWorker(QObject):
+    packet_received = Signal(str, list)   # name, list_of_floats
+    error = Signal(str)
+
+    def __init__(self, port: str = 'COM6', baud: int = 921600, timeout: float = 1.0):
+        super().__init__()
+        self.port = port
+        self.baud = baud
+        self.timeout = timeout
+        self._running = False
+        self.ser = None
+
+    @Slot()
+    def start(self):
+        self._running = True
+        try:
+            self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
+        except Exception as e:
+            self.error.emit(f"Serial open error: {e}")
+            # keep trying to open
+            while self._running:
+                try:
+                    self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
+                    break
+                except Exception as e2:
+                    self.error.emit(f"Retry open failed: {e2}")
+                    time.sleep(1)
+
+        while self._running:
+            try:
+                line = self.ser.readline()
+                if not line:
+                    continue
+                uint8_raw_values = [b for b in line.strip()]
+                packet_type = uint8_raw_values[0]
+                checksum_packet = uint8_raw_values[-1]
+                checksum_calc = 0
+                for b in uint8_raw_values[:-1]:
+                    checksum_calc ^= b
+                if checksum_packet != checksum_calc:
+                    self.error.emit(f"Checksum error: packet {checksum_packet} != calc {checksum_calc}")
+                    continue
+
+                float_values = []
+                for b in range(len(uint8_raw_values[1:-1]) // 4):
+                    float_bytes = bytes(uint8_raw_values[1 + b*4: 1 + (b+1)*4])
+                    float_values.append(struct.unpack('f', float_bytes)[0])
+
+                name = TELEMETRY_PACKET_TYPE.get(packet_type)
+                self.packet_received.emit(name, float_values)
+            except serial.SerialException as e:
+                self.error.emit(f"Serial error: {e}")
+                # try to reconnect without blocking GUI thread
+                try:
+                    if self.ser:
+                        self.ser.close()
+                except:
+                    pass
+                time.sleep(1)
+                while self._running:
+                    try:
+                        self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
+                        break
+                    except Exception as e2:
+                        self.error.emit(f"Reconnect failed: {e2}")
+                        time.sleep(1)
+            except Exception as e:
+                self.error.emit(f"Unexpected worker error: {e}")
+                # time.sleep(0.1)
+
+    @Slot()
+    def stop(self):
+        self._running = False
+        try:
+            if self.ser and self.ser.is_open:
+                self.ser.close()
+        except:
+            pass
+
 
 class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
     reset_signal = Signal()
@@ -71,7 +152,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         super(MaxwellStudio, self).__init__(parent)
         self.setupUi(self)
 
-        self.ser = serial.Serial('COM6', 921600)
+        # self.ser = serial.Serial('COM6', 921600)
 
         self.frames = []
         self.plots = [self.plot1, self.plot2, self.plot3, self.plot4]
@@ -90,14 +171,44 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
         self.reset_signal.connect(self.reset)
 
-        # A q thread
-        self.update_thread = QThread()
-        self.update_thread.run = self.update
-        self.update_thread.start()
+        # Start SerialWorker in its own QThread
+        self.reader_thread = QThread()
+        self.reader = SerialWorker(port='COM6', baud=921600, timeout=1.0)
+        self.reader.moveToThread(self.reader_thread)
+        self.reader.packet_received.connect(self.handle_packet)
+        self.reader.error.connect(self.handle_worker_error)
+        self.reader_thread.started.connect(self.reader.start)
+        self.reader_thread.start()
 
         self.update_plots_timer = QTimer()
         self.update_plots_timer.timeout.connect(self.update_plots)
-        self.update_plots_timer.start(1)
+        self.update_plots_timer.start(10) # Update every 10 ms
+
+
+    @Slot(str, list)
+    def handle_packet(self, name: str, data_list: list):
+        if name == "GENERAL":
+            self.outputLabel.setText(f"GENERAL: {data_list}")
+        # Called in the main (GUI) thread via signal
+        data = [float(x) for x in data_list]
+        for frame in self.frames:
+            if frame.name == name:
+                frame.sample_queue.append(time.time() - self.start_time)
+                for i, d in enumerate(data):
+                    frame.data_queues[i].append(d)
+                break
+        else:
+            new_frame = Frame(name, [deque(maxlen=BUFFER_SIZE) for _ in range(len(data))])
+            new_frame.sample_queue.append(time.time() - self.start_time)
+            for i, d in enumerate(data):
+                new_frame.data_queues[i].append(d)
+            self.frames.append(new_frame)
+            for combobox in self.comboboxes:
+                combobox.addItem(name)
+
+    @Slot(str)
+    def handle_worker_error(self, msg: str):
+        print(f"Worker: {msg}")
 
     def combobox_changed(self, i):
         # Get the selected frame
@@ -118,8 +229,8 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
     def setup_graphs(self):
         for i, plot in enumerate(self.plots):
             plot.setTitle(f'Plot {i+1}')
-            plot.setLabel('left', 'Value')
-            plot.setLabel('bottom', 'Sample')
+            plot.setLabel('left', 'Value', " ")
+            plot.setLabel('bottom', 'Time', "s")
             plot.showGrid(x=True, y=True)
 
     @Slot()

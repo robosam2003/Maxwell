@@ -47,10 +47,15 @@ AS5048A::AS5048A(byte CS, SPIClass& spi, uint32_t spiFreq) {
     // Set up SPI settings - SPI MODE 1 because data is captured on the falling edge of the clock
     // and propagated on the rising edge - https://en.wikipedia.org/wiki/Serial_Peripheral_Interface
     _settings = SPISettings(spiFreq, MSBFIRST, SPI_MODE1);
-    _direction = SENSOR_DIRECTION::CCW; // Default - may be changed by the init sequence.
+    _direction = SENSOR_DIRECTION::CW; // Default - may be changed by the init sequence.
     // Set up CS pin
     pinMode(_CS, OUTPUT);
     digitalWrite(_CS, HIGH);
+
+    timer = new HardwareTimer(TIM3);
+    timer->setMode(1, TIMER_OUTPUT_DISABLED);
+    timer->setOverflow(84000000, HERTZ_FORMAT); // 84 MHz clock
+    timer->resume();
 
     // Begin the SPI bus.
     _spi.begin();
@@ -78,16 +83,21 @@ float AS5048A::get_angle() {
 }
 
 float AS5048A::get_velocity() {
-    uint32_t current_time = micros();
-    float Ts = (current_time - prev_time_us) * 1e-6f; // Convert microseconds to seconds
-    if (Ts < 100e-6) { // 100 microseconds
+    int current_time_counts = static_cast<int>(timer->getCount()); // in microseconds
+    if (current_time_counts < prev_time_counts) {
+        // Timer overflowed - adjust previous time accordingly
+        prev_time_counts -= 0xFFFF;
+    }
+    // 84 MHz timer -> 11.9 ns per count
+    float Ts = (current_time_counts - prev_time_counts) * 11.9e-9; // Convert to seconds
+    if (Ts < 100e-6) { // 1 microseconds
         return velocity;
     }
     velocity = (absolute_angle - prev_absolute_angle) / Ts;
     if (_direction == CCW) {
         velocity = -velocity; // Adjust for direction
     }
-    prev_time_us = current_time;
+    prev_time_counts = current_time_counts;
     return velocity;
 }
 

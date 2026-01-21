@@ -8,6 +8,7 @@
 #include "PositionSensor.h"
 #include <SPI.h>
 #include "../../include/config.h"
+#include "HardwareTimer.h"
 
 
 class AS5048A : public PositionSensor {
@@ -29,8 +30,8 @@ private:
         ANGLE = 0x3FFF
     };
 
-    uint32_t prev_time_us = 0; // Timestamp of the previous angle reading
-
+    int prev_time_counts = 0; // Timestamp of the previous angle reading
+    HardwareTimer* timer;
     uint16_t read_reg(REGISTER regAddress);
     void write_reg(REGISTER regAddress, uint16_t data);
 

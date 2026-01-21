@@ -3,7 +3,6 @@
 //
 
 #include "current_sensors.h"
-#
 
 CurrentSensors::CurrentSensors(uint32_t pin_a, uint32_t pin_b, uint32_t pin_c, int gain) {
     _pin_a = pin_a;
@@ -17,7 +16,7 @@ CurrentSensors::CurrentSensors(uint32_t pin_a, uint32_t pin_b, uint32_t pin_c, i
     _offset_b = 0.0;
     _offset_c = 0.0;
 
-    double cuttoff_freq = 20;
+    double cuttoff_freq = 40;
     _filter_a = new RCFilter(cuttoff_freq);
     _filter_b = new RCFilter(cuttoff_freq);
     _filter_c = new RCFilter(cuttoff_freq);
@@ -125,7 +124,7 @@ void CurrentSensors::calibrate_offsets() {
   filtered = false; // Ensure no filtering for this bit
 
   for (int i = 0; i< num_samples; i++) {
-    read();
+    // read();
     // Let the value settle
     get_current_a();
     get_current_b();
@@ -133,7 +132,7 @@ void CurrentSensors::calibrate_offsets() {
     delay(1);
   }
   for (int i = 0; i < num_samples; i++) {
-    read();
+    // read();
     sum_a += get_current_a();
     sum_b += get_current_b();
     sum_c += get_current_c();
@@ -146,49 +145,77 @@ void CurrentSensors::calibrate_offsets() {
   }
 
 void CurrentSensors::read() {
-  HAL_ADCEx_InjectedPollForConversion(hadc1, 100);
-  v_a = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_1) * CURRENT_SENSE_CONVERSION_FACTOR;
-  v_b = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_2) * CURRENT_SENSE_CONVERSION_FACTOR;
-  v_c = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_3) * CURRENT_SENSE_CONVERSION_FACTOR;
-  uint32_t current_time_us = micros();
-  // _current_a = v_a;
-  // _current_b = v_b;
-  // _current_c = v_c;
-  float a_calc = (3.3/2 - v_a) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_a : -_offset_a);
-  float b_calc = (3.3/2 - v_b) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_b : -_offset_b);
-  float c_calc = (3.3/2 - v_c) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_c : -_offset_c);
-
-  // Invert things
-  (inverted) ? (a_calc *= -1, b_calc *= -1, c_calc *= -1) : 0;
-
-  if (filtered) {
-    _current_a = (abs(a_calc) < ANOMALY_THRESHOLD) ? _filter_a->update(a_calc, current_time_us): _current_a;
-    _current_b = (abs(b_calc) < ANOMALY_THRESHOLD) ? _filter_b->update(b_calc, current_time_us): _current_b;
-    // _current_c = 0.0 - _current_a - _current_b; // c_calc is not used in the filtered case, because it is redundant
-    _current_c = (abs(c_calc) < ANOMALY_THRESHOLD) ? _filter_c->update(c_calc, current_time_us): _current_c;
-  }
-  else {
-    _current_a = (abs(a_calc) < ANOMALY_THRESHOLD) ? a_calc : _current_a;
-    _current_b = (abs(b_calc) < ANOMALY_THRESHOLD) ? b_calc : _current_b;
-    // _current_c = 0.0 - _current_a - _current_b; // c_calc is not used in the non-filtered case, because it is redundant
-    _current_c = (abs(c_calc) < ANOMALY_THRESHOLD) ? c_calc : _current_c;
-  }
+  // HAL_ADCEx_InjectedPollForConversion(hadc1, 100);
+  // v_a = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_1) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // v_b = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_2) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // v_c = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_3) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // uint32_t current_time_us = micros();
+  // // _current_a = v_a;
+  // // _current_b = v_b;
+  // // _current_c = v_c;
+  // float a_calc = (3.3/2 - v_a) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_a : -_offset_a);
+  // float b_calc = (3.3/2 - v_b) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_b : -_offset_b);
+  // float c_calc = (3.3/2 - v_c) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_c : -_offset_c);
+  //
+  // // Invert things
+  // (inverted) ? (a_calc *= -1, b_calc *= -1, c_calc *= -1) : 0;
+  //
+  // if (filtered) {
+  //   _current_a = (abs(a_calc) < ANOMALY_THRESHOLD) ? _filter_a->update(a_calc, current_time_us): _current_a;
+  //   _current_b = (abs(b_calc) < ANOMALY_THRESHOLD) ? _filter_b->update(b_calc, current_time_us): _current_b;
+  //   // _current_c = 0.0 - _current_a - _current_b; // c_calc is not used in the filtered case, because it is redundant
+  //   _current_c = (abs(c_calc) < ANOMALY_THRESHOLD) ? _filter_c->update(c_calc, current_time_us): _current_c;
+  // }
+  // else {
+  //   _current_a = (abs(a_calc) < ANOMALY_THRESHOLD) ? a_calc : _current_a;
+  //   _current_b = (abs(b_calc) < ANOMALY_THRESHOLD) ? b_calc : _current_b;
+  //   // _current_c = 0.0 - _current_a - _current_b; // c_calc is not used in the non-filtered case, because it is redundant
+  //   _current_c = (abs(c_calc) < ANOMALY_THRESHOLD) ? c_calc : _current_c;
+  // }
+  return;
 }
 
 
 double CurrentSensors::get_current_a() {
   v_a = analogRead(_pin_a) * CURRENT_SENSE_CONVERSION_FACTOR;
-  return (3.3/2 - v_a) / (_csa_gain * R_SENSE);
+  float calc_a = (3.3/2 - v_a) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_a : -_offset_a);
+  (inverted) ? (calc_a *= -1) : 0;
+
+  if (filtered) {
+    _current_a = (abs(calc_a) < ANOMALY_THRESHOLD) ? _filter_a->update(calc_a, micros()): _current_a;
+  }
+  else {
+    _current_a = (abs(calc_a) < ANOMALY_THRESHOLD) ? calc_a : _current_a;
+  }
+  return _current_a;
 }
 
 double CurrentSensors::get_current_b() {
   v_b = analogRead(_pin_b) * CURRENT_SENSE_CONVERSION_FACTOR;
-  return (3.3/2 - v_b) / (_csa_gain * R_SENSE);
+  float calc_b = (3.3/2 - v_b) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_b : -_offset_b);
+  (inverted) ? (calc_b *= -1) : 0;
+
+  if (filtered) {
+    _current_b = (abs(calc_b) < ANOMALY_THRESHOLD) ? _filter_b->update(calc_b, micros()): _current_b;
+  }
+  else {
+    _current_b = (abs(calc_b) < ANOMALY_THRESHOLD) ? calc_b : _current_b;
+  }
+  return _current_b;
 }
 
 double CurrentSensors::get_current_c() {
   v_c = analogRead(_pin_c) * CURRENT_SENSE_CONVERSION_FACTOR;
-  return (3.3/2 - v_c) / (_csa_gain * R_SENSE);
+  float calc_c = (3.3/2 - v_c) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_c : -_offset_c);
+  (inverted) ? (calc_c *= -1) : 0;
+
+  if (filtered) {
+    _current_c = (abs(calc_c) < ANOMALY_THRESHOLD) ? _filter_c->update(calc_c, micros()): _current_c;
+  }
+  else {
+    _current_c = (abs(calc_c) < ANOMALY_THRESHOLD) ? calc_c : _current_c;
+  }
+  return _current_c;
 }
 
 double* CurrentSensors::get_currents() {
@@ -199,6 +226,3 @@ double* CurrentSensors::get_currents() {
 double CurrentSensors::get_total_current() {
   return _current_a + _current_b + _current_c;
 }
-
-
-

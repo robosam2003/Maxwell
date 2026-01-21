@@ -60,7 +60,7 @@ void setup() {
     maxwell.set_phase_voltages(0, 0, 0);
     // //
     // pwm_input.set_callback(pwm_callback);
-    // maxwell.current_sensors->calibrate_offsets();
+    maxwell.current_sensors->calibrate_offsets();
     maxwell.driver->clear_fault();
 
     maxwell.foc_init_sequence();
@@ -71,7 +71,11 @@ void loop() {
     digitalToggle(GREEN_LED_PIN);
     // maxwell.telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {1.234f, 3.1415f, 2.718f}});
     // delay(10);
-    maxwell.voltage_torque_control();
+    // maxwell.voltage_torque_control();
+    maxwell.foc_current_torque_control();
+    // maxwell.encoder->update();
+    // maxwell.telemetry->send({ROTOR_POSITION, {maxwell.encoder->get_angle()}});
+    // delay(10);
 
 }
 #endif

@@ -122,10 +122,14 @@
 #define PWM_IN_PIN                  PC6
 
 // Hall sensors
-#define HALL_A_PIN                  PB10
-#define HALL_B_PIN                  PB11
-#define HALL_C_PIN                  PC3
-#define HALL_TEMP_PIN               PC2
+// #define HALL_A_PIN                  PB10
+// #define HALL_B_PIN                  PB11
+// #define HALL_C_PIN                  PC3
+// #define HALL_TEMP_PIN               PC2
+
+// External Encoder
+#define EXTERNAL_ENCODER_CS_PIN     PB11
+
 
 
 

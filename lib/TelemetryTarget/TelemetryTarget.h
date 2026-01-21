@@ -15,9 +15,8 @@ enum TELEMETRY_PACKET_TYPE : uint8_t {
     PHASE_CURRENTS,
     ALPHA_BETA_CURRENTS,
     DQ_CURRENTS,
-    BUS_VOLTAGE
-
-
+    BUS_VOLTAGE,
+    COMMAND_VOLTAGES,
 };
 struct telemetry_packet {
     TELEMETRY_PACKET_TYPE type;

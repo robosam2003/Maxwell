@@ -7,6 +7,8 @@
 #include <ratio>
 #include <FreeRTOS/Source/include/FreeRTOS.h>
 
+#include "FreeRTOS/Source/include/FreeRTOS.h"
+
 namespace Maxwell {
     #define MAX_LEVEL 80  // out of 255
     #define MAX_SPEED 2000 // electrical rads/s
@@ -30,6 +32,11 @@ namespace Maxwell {
             AS5047P_CS_PIN,
             SPI_1,
             1000000); // 1 MHz SPI frequency
+        // encoder = new AS5048A ( // External encoder
+        //     EXTERNAL_ENCODER_CS_PIN,
+        //     SPI_2,
+        //     10000); // 1 MHz SPI frequency
+
         pwm_input = new PWMInput(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
         trigger = new triggered{false, false, false};
@@ -44,14 +51,15 @@ namespace Maxwell {
 
         pwm_3x = new pwm_3x_struct();
         pwm_3x->PIN_A_STATE = 0; pwm_3x->PIN_B_STATE = 0; pwm_3x->PIN_C_STATE = 0;
+        encoder->_direction = SENSOR_DIRECTION::CW; // Confirmed via testing
 
         instance = this;
     }
 
     void Maxwell::setup() {
-        pinMode(HALL_A_PIN, INPUT);
-        pinMode(HALL_B_PIN, INPUT);
-        pinMode(HALL_C_PIN, INPUT);
+        // pinMode(HALL_A_PIN, INPUT);
+        // pinMode(HALL_B_PIN, INPUT);
+        // pinMode(HALL_C_PIN, INPUT);
 
         pinMode(GREEN_LED_PIN, OUTPUT);
         // Breakout to a driver class?
@@ -359,48 +367,51 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
+
         encoder->update();
+
         float zero_angle = encoder->get_angle();
 
-        float theta = _3PI_2;
+        float theta = 0;
         for (long i=0; i<60000; i++) {
-            theta += 0.0001;
-            theta = fmod(theta, _2PI);
+            theta += 0.001;
+            // theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
-            }
-            set_phase_voltages({0, align_max_voltage}, theta);
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta,encoder->get_angle() * POLE_PAIRS_6374}});}
+            set_phase_voltages({align_max_voltage, 0}, theta);
         }
         encoder->update();
         float top_angle = encoder->get_angle();
         for (long i=0; i<60000; i++) {
-            theta -= 0.0001;
-            theta = fmod(theta, _2PI);
+            theta -= 0.001;
+            // theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta, encoder->get_angle() * POLE_PAIRS_6374}});
             }
-            set_phase_voltages({0, align_max_voltage}, theta);
+            set_phase_voltages({align_max_voltage, 0}, theta);
         }
         float bottom_angle = encoder->get_angle();
+        // Offset is the bottom angle (we should now be at zero electrical angle)
+        encoder->set_offset(bottom_angle - theta);
+
 
         // Calculate CW or CCW encoder configuration
         float diff = top_angle - zero_angle;
 
         if (diff > 0) {
-            encoder->_direction = SENSOR_DIRECTION::CCW;
+            encoder->_direction = SENSOR_DIRECTION::CW;
         }
         else if (diff < 0) {
-            encoder->_direction = SENSOR_DIRECTION::CW;
+            encoder->_direction = SENSOR_DIRECTION::CCW;
         }
         else {
             Serial.println("DID NOT DETECT MOVEMENT");
         }
-
         // Current sensor calibration:
         // set_phase_voltages(-0.75, 0, 0.75);
-        // for (int i=0; i<500; i++) {
+        // for (int i=0; i<10; i++) {
         //     current_sensors->read();
         //     double currents[3] = {current_sensors->get_current_a(),
         //                             current_sensors->get_current_b(),
@@ -409,22 +420,66 @@ namespace Maxwell {
         //         PhaseCurrents{static_cast<float>(currents[0]),
         //                         static_cast<float>(currents[1]),
         //                         static_cast<float>(currents[2])});
-        //     dq_struct dq_vec = park_transform(ab_vec);
-        //     phase_current_frame.values = {currents[0], currents[1], currents[2]};
-        //     alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
-        //     dq_frame.values = {dq_vec.d, dq_vec.q};
+        //     encoder->update();
+        //     dq_struct dq_vec = park_transform(ab_vec, encoder->get_angle());
+        //     telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(currents[0]),
+        //                                                                             static_cast<float>(currents[1]),
+        //                                                                             static_cast<float>(currents[2])}});
+        //     // telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(dq_vec.d),
+        //     //                                                                     static_cast<float>(dq_vec.q)}});
+        //     telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND_VOLTAGES, {-0.75, 0, 0.75}});
         //
-        //     send_frame(phase_current_frame);
-        //     send_frame(alpha_beta_frame);
-        //     send_frame(dq_frame);
-        //     delay(5);
+        //     delay(10);
         // }
-        set_phase_voltages({0, align_max_voltage}, _3PI_2);
-        delay(500);
-        encoder->update();
-        encoder->set_offset(encoder->get_angle());
 
+        // set_phase_voltages({align_max_voltage, 0}, 0);
+        // delay(700);
+        // encoder->update();
+        // encoder->set_offset(encoder->get_angle());
+        telemetry->send({GENERAL, {zero_angle, top_angle, bottom_angle,
+                                                        static_cast<float>(encoder->_direction),
+                                                        static_cast<float>(encoder->offset)}});
         set_phase_voltages(0, 0, 0);
+
+        // // wait until current it low
+        // double current_a = current_sensors->get_current_a();
+        // double current_b = current_sensors->get_current_b();
+        // double current_c = current_sensors->get_current_c();
+        // while ((abs(current_a) > 2.0) || (abs(current_b) > 2.0) || (abs(current_c) > 2.0)) {
+        //     current_a = current_sensors->get_current_a();
+        //     current_b = current_sensors->get_current_b();
+        //     current_c = current_sensors->get_current_c();
+        //     telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(current_a),
+        //                                                                 static_cast<float>(current_b),
+        //                                                                 static_cast<float>(current_c)}});
+        //     delay(10);
+        // }
+        //
+        // // Home the linear actuator by checking when current draw increases
+        // bool homed = false;
+        // theta = 0;
+        // int i = 0;
+        // float thresh = 10.0; // Amps
+        // while (!homed) {
+        //     theta += 0.001;
+        //     set_phase_voltages({1.0, 0.0}, theta);
+        //     current_a = current_sensors->get_current_a();
+        //     current_b = current_sensors->get_current_b();
+        //     current_c = current_sensors->get_current_c();
+        //     encoder->update();
+        //     if (i%500==0) {
+        //         telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(current_a),
+        //                                                                                     static_cast<float>(current_b),
+        //                                                                                     static_cast<float>(current_c)}});
+        //         telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta,
+        //                                                                                     encoder->get_angle()}});
+        //     }
+        //     if ((abs(current_a) > thresh || abs(current_b) > thresh || abs(current_c) > thresh) & (i > 5000)) {
+        //         homed = true;
+        //     }
+        //     i++;
+        // }
+        // set_phase_voltages(0, 0, 0);
     }
 
     void Maxwell::sinusoidal_position_control() {
@@ -502,26 +557,22 @@ namespace Maxwell {
             set_phase_voltages(command_dq);
 
 
-        uint32_t current_time = millis();
+            uint32_t current_time = millis();
 
-        if (current_time - prev_millis >= 30) { // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
-            // current_sensors->read();
-            double currents[3] = {current_sensors->get_current_a(),
-                                 current_sensors->get_current_b(),
-                                 current_sensors->get_current_c()};
+            if (current_time - prev_millis >= 30) { // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
+                double currents[3] = {current_sensors->get_current_a(),
+                                     current_sensors->get_current_b(),
+                                     current_sensors->get_current_c()};
 
-            encoder->update();
-            telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
-            telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {encoder->get_velocity()}});
-            telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(currents[0]),
-                                                                                    static_cast<float>(currents[1]),
-                                                                                    static_cast<float>(currents[2])}});
+                encoder->update();
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {encoder->get_velocity()}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(currents[0]),
+                                                                                        static_cast<float>(currents[1]),
+                                                                                        static_cast<float>(currents[2])}});
 
-
-
-
-            prev_millis = current_time;
-        }
+                prev_millis = current_time;
+            }
         }
 
     }
@@ -539,8 +590,8 @@ namespace Maxwell {
                             0.0,
                             0.0,
                             0.0,
-                            30,
-                            30);
+                            60,
+                            60);
         PIDController velocity_pid_controller =
             PIDController(  0.2,
                             2,
@@ -550,7 +601,7 @@ namespace Maxwell {
                             20);
 
         RCFilter velocity_lpf = RCFilter(2);
-        RCFilter input_lpf = RCFilter(0.5);
+        RCFilter input_lpf = RCFilter(5);
         // Step function generator
         float step_period = 3; // seconds
         uint32_t step_period_start = millis();
@@ -565,8 +616,9 @@ namespace Maxwell {
         while (true) {
             uint32_t current_time_us = micros();
             uint32_t current_time_ms = millis();
-            // double desired_angle = 0.0; //input_lpf.update(pwm_input->read_percentage() / 100.0 * 2 * PI * 15, current_time_us); // Desired_angle is from the pwm_input
-            // If the step period is over, change the desired angle
+            // double desired_angle = input_lpf.update(pwm_input->read_percentage() / 100.0 * 2 * PI * 15, current_time_us); // Desired_angle is from the pwm_input
+
+            // Trapezoidal reference generator
             if (current_time_ms - step_period_start >= (step_period * 1000)) {
                 step_period_start = current_time_ms;
                 desired_ramp_to_angle = (desired_ramp_to_angle == low_angle) ? high_angle : low_angle;
@@ -604,12 +656,12 @@ namespace Maxwell {
             // position_pid_controller.print_state();
             // velocity_pid_controller.print_state();
 
-            dq_struct command_dq = {0, -I_q};
+            dq_struct command_dq = {0, I_q};
             set_phase_voltages(command_dq);
 
             if (current_time_ms - prev_millis >= 30) {
                 // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
-                current_sensors->read();
+                // current_sensors->read();
                 double currents[3] = {current_sensors->get_current_a(),
                                      current_sensors->get_current_b(),
                                      current_sensors->get_current_c()};
@@ -619,22 +671,17 @@ namespace Maxwell {
 
                 alpha_beta_struct ab_vec = clarke_transform(phase_currents);
                 dq_struct dq_vec = park_transform(ab_vec, rotor_theta);
-                // command_voltage_frame.values = {v_a, v_b, v_c};
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {static_cast<float>(desired_angle),
+                                                                                        static_cast<float>(rotor_theta)}});
 
-                // phase_current_frame.values = {currents[0], currents[1], currents[2]};
-                // rotor_position_frame.values = {desired_angle ,rotor_theta};
-                // rotor_velocity_frame.values = {desired_velocity, rotor_velocity};
-                // alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
-                // dq_frame.values = {dq_vec.d, dq_vec.q};
-                // send_frame(rotor_position_frame);
-                // send_frame(rotor_velocity_frame);
-                // send_frame(phase_current_frame);
-                // send_frame(alpha_beta_frame);
-                // send_frame(dq_frame);
-                // send_frame(command_voltage_frame);
-                // Serial.print(currents[0]); Serial.print(" ");
-                // Serial.print(currents[1]); Serial.print(" ");
-                // Serial.println(currents[2]);
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {static_cast<float>(desired_velocity),
+                                                                                        static_cast<float>(rotor_velocity)}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(currents[0]),
+                                                                                        static_cast<float>(currents[1]),
+                                                                                        static_cast<float>(currents[2])}});
+
+
+
 
                 // position_pid_controller.print_state();
                 // velocity_pid_controller.print_state();
@@ -731,7 +778,7 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
 
         PIDController d_pid_controller =
-            PIDController(  1.0,
+            PIDController(  2.0,
                             0.0,
                             0.0,
                             0.0,
@@ -739,22 +786,22 @@ namespace Maxwell {
                             1);
 
         PIDController q_pid_controller =
-            PIDController(  1.0,
-                            0.00,
+            PIDController(  2.0,
+                            0.0,
                             0.0,
                             0.0,
                             max_current,
                             3);
         PIDController position_pid_controller =
             PIDController(  20,
-                            0.1,
                             0.0,
                             0.0,
-                            150,
-                            150);
+                            0.0,
+                            250,
+                            250);
         PIDController velocity_pid_controller =
-            PIDController(  0.2,
-                            0.5,
+            PIDController(  0.05,
+                            1.0,
                             0.000,
                             0.0,
                             20,
@@ -768,47 +815,53 @@ namespace Maxwell {
         auto command_q_lpf = RCFilter(40.0);
         auto command_d_lpf = RCFilter(40.0);
         auto velocity_lpf = RCFilter(2.0);
-        auto input_lpf = RCFilter(1.0);
+        auto input_lpf = RCFilter(2.0);
 
 
         double step_period = 2.0; // seconds
         uint32_t step_period_start = millis();
-        double high_angle = 2.0 * PI * 10.0; // 15 revolutions
+        double high_angle = 2.0 * PI * 3; // 3 revolutions
         double low_angle = - high_angle; // 0 revolutions
         double desired_ramp_to_angle = low_angle; // radians
-        double desired_angle = low_angle;
 
+
+        double desired_angle = 0.0;
+        float thresh = 2.0;
+        float position_offset = 0.0;
 
 
         uint32_t prev_millis = 0;
         uint32_t current_time_ms = millis();
         uint32_t current_time_us = micros();
+        bool homed = false;
         while (true) {
             current_time_us = micros();
             current_time_ms = millis();
-            if (current_time_ms - step_period_start >= (step_period * 1000.0)) {
-                step_period_start = current_time_ms;
-                desired_ramp_to_angle = (desired_ramp_to_angle == low_angle) ? high_angle : low_angle;
-            }
-            else {
-                double ramp_step_percentage = 0.5;
-                double ramp_duration = step_period * ramp_step_percentage;
-                double elapsed = (current_time_ms - step_period_start) / 1000.0; // Convert to seconds
-                double ramp_progress = elapsed / ramp_duration; // 0 to 1
-                if (elapsed <= ramp_duration) {
-                    if (desired_ramp_to_angle == low_angle) {
-                        desired_angle = high_angle - (high_angle - low_angle) * ramp_progress;
-                    } else if (desired_ramp_to_angle == high_angle) {
-                        desired_angle = low_angle + (high_angle - low_angle) * ramp_progress;
-                    }
-                } else {
-                    desired_angle = desired_ramp_to_angle;
-                }
-            }
 
-            // double pos_ref = input_lpf.update(pwm_input->read_percentage() / 100.0 * 2*PI * 20.0, current_time_us); // Desired velocity in rad/s
+            // Trapezoidal reference generator
+            // if (current_time_ms - step_period_start >= (step_period * 1000.0)) {
+            //     step_period_start = current_time_ms;
+            //     desired_ramp_to_angle = (desired_ramp_to_angle == low_angle) ? high_angle : low_angle;
+            // }
+            // else {
+            //     double ramp_step_percentage = 0.5;
+            //     double ramp_duration = step_period * ramp_step_percentage;
+            //     double elapsed = (current_time_ms - step_period_start) / 1000.0; // Convert to seconds
+            //     double ramp_progress = elapsed / ramp_duration; // 0 to 1
+            //     if (elapsed <= ramp_duration) {
+            //         if (desired_ramp_to_angle == low_angle) {
+            //             desired_angle = high_angle - (high_angle - low_angle) * ramp_progress;
+            //         } else if (desired_ramp_to_angle == high_angle) {
+            //             desired_angle = low_angle + (high_angle - low_angle) * ramp_progress;
+            //         }
+            //     } else {
+            //         desired_angle = desired_ramp_to_angle;
+            //     }
+            // }
+            if (homed) {
+                desired_angle = input_lpf.update(-pwm_input->read_percentage() / 100.0 * 2*PI * 6.25 + position_offset, current_time_us);
+            }
             position_pid_controller.set_setpoint(desired_angle);
-
 
             encoder->update();
             float theta = encoder->get_angle();
@@ -818,16 +871,16 @@ namespace Maxwell {
                 rotor_velocity = 0; // Prevents the PID controller from going crazy
             }
             float vel_ref = position_pid_controller.update(theta);
+            // float vel_ref = pwm_input->read_percentage() / 100.0f * 100;
 
             velocity_pid_controller.set_setpoint(vel_ref);
 
-            float I_q = (-1.0) * velocity_pid_controller.update(rotor_velocity);
+            float I_q = velocity_pid_controller.update(rotor_velocity);
 
-            // float I_q = pwm_input->read_percentage() / 100.0 * max_current;
+            // float I_q = pwm_input->read_percentage() / 100.0f * max_current;
             q_pid_controller.set_setpoint(I_q);
 
-
-            current_sensors->read();
+            // current_sensors->read();
             PhaseCurrents currents = {
                 current_sensors->get_current_a(),
                 current_sensors->get_current_b(),
@@ -841,9 +894,9 @@ namespace Maxwell {
             dq_meas.q = q_lpf.update(dq_meas.q, current_time_us);
 
             // Update the PID controllers
-            dq_struct command_dq = {0, 0};
-            command_dq.d = command_d_lpf.update(d_pid_controller.update(dq_meas.d), current_time_us);
-            command_dq.q = command_q_lpf.update(q_pid_controller.update(dq_meas.q), current_time_us);
+            dq_struct command_dq = {0, I_q};
+            // command_dq.d = command_d_lpf.update(d_pid_controller.update(dq_meas.d), current_time_us);
+            // command_dq.q = command_q_lpf.update(q_pid_controller.update(dq_meas.q), current_time_us);
             alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta);
             PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
             set_phase_voltages(command_voltages.current_a,
@@ -851,31 +904,34 @@ namespace Maxwell {
                                 command_voltages.current_c);
             // float loop_freq = 1 / ((micros() - current_time_us) / 1000000.0);
             // Serial.println(loop_freq);
+            if (!homed) {
+                desired_angle += 0.01;
 
-            if (current_time_ms - prev_millis >= 100) {
+                if (abs(currents.current_a) > thresh || abs(currents.current_b) > thresh || abs(currents.current_c) > thresh) {
+                    homed = true;
+                    position_offset = theta;
+
+                    // encoder->set_offset(theta);
+                    desired_angle = position_offset;
+                }
+            }
+
+            if (current_time_ms - prev_millis >= 30) {
                 // Cannot be too fast, otherwise it messes up results (cannot handle serial buffer speed)
-                // phase_current_frame.values = {currents.current_a,
-                //                             currents.current_b,
-                //                             currents.current_c};
-                //
-                // alpha_beta_frame.values = {ab_vec.alpha, ab_vec.beta};
-                // dq_frame.values = {dq_meas.d, dq_meas.q, command_dq.d, command_dq.q, I_q};
-                // command_voltage_frame.values = {command_voltages.current_a,
-                //                                     command_voltages.current_b,
-                //                                     command_voltages.current_c};
-                //
-                // rotor_position_frame.values = {desired_angle, theta};
-                // rotor_velocity_frame.values = {vel_ref, rotor_velocity};
-                //
-                // send_frame(phase_current_frame);
-                // // send_frame(alpha_beta_frame);
-                // send_frame(dq_frame);
-                // // send_frame(phase_current_frame);
-                //
-                // // q_pid_controller.print_state();
-                // send_frame(rotor_position_frame);
-                // send_frame(rotor_velocity_frame);
-                // send_frame(command_voltage_frame);
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {static_cast<float>(desired_angle),
+                                                                                        static_cast<float>(theta)}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {static_cast<float>(vel_ref),
+                                                                                        static_cast<float>(rotor_velocity)}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(currents.current_a),
+                                                                                          static_cast<float>(currents.current_b),
+                                                                                          static_cast<float>(currents.current_c)}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(dq_meas.d),
+                                                                                       static_cast<float>(dq_meas.q),
+                                                                                        static_cast<float>(command_dq.d),
+                                                                                        static_cast<float>(command_dq.q),
+                                                                                        static_cast<float>(I_q)
+                }});
+
                 prev_millis = current_time_ms;
             }
         }

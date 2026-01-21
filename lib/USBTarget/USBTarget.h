@@ -21,6 +21,8 @@ private:
 public:
     void initialize() override;
     void send(const telemetry_packet& packet) override;
+    static void generate_checksum(uint8_t* data, size_t length);
+
 };
 
 

@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'maxwellstudio.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.1
+## Created by: Qt User Interface Compiler version 6.6.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -36,6 +36,21 @@ class Ui_MainWindow(object):
         self.tab.setObjectName(u"tab")
         self.gridLayout_3 = QGridLayout(self.tab)
         self.gridLayout_3.setObjectName(u"gridLayout_3")
+        self.plot4_combobox = QComboBox(self.tab)
+        self.plot4_combobox.setObjectName(u"plot4_combobox")
+
+        self.gridLayout_3.addWidget(self.plot4_combobox, 4, 2, 1, 1)
+
+        self.plot4 = PlotWidget(self.tab)
+        self.plot4.setObjectName(u"plot4")
+        sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.plot4.sizePolicy().hasHeightForWidth())
+        self.plot4.setSizePolicy(sizePolicy)
+
+        self.gridLayout_3.addWidget(self.plot4, 3, 2, 1, 1)
+
         self.plot3_combobox = QComboBox(self.tab)
         self.plot3_combobox.setObjectName(u"plot3_combobox")
 
@@ -87,29 +102,14 @@ class Ui_MainWindow(object):
 
         self.gridLayout_3.addWidget(self.titleFrame, 0, 0, 1, 4)
 
-        self.plot2_combobox = QComboBox(self.tab)
-        self.plot2_combobox.setObjectName(u"plot2_combobox")
+        self.statusLabel = QLabel(self.tab)
+        self.statusLabel.setObjectName(u"statusLabel")
 
-        self.gridLayout_3.addWidget(self.plot2_combobox, 2, 2, 1, 1)
-
-        self.plot4 = PlotWidget(self.tab)
-        self.plot4.setObjectName(u"plot4")
-        sizePolicy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.plot4.sizePolicy().hasHeightForWidth())
-        self.plot4.setSizePolicy(sizePolicy)
-
-        self.gridLayout_3.addWidget(self.plot4, 3, 2, 1, 1)
-
-        self.plot4_combobox = QComboBox(self.tab)
-        self.plot4_combobox.setObjectName(u"plot4_combobox")
-
-        self.gridLayout_3.addWidget(self.plot4_combobox, 4, 2, 1, 1)
+        self.gridLayout_3.addWidget(self.statusLabel, 5, 1, 1, 2)
 
         self.plot3 = PlotWidget(self.tab)
         self.plot3.setObjectName(u"plot3")
-        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         sizePolicy1.setHorizontalStretch(0)
         sizePolicy1.setVerticalStretch(0)
         sizePolicy1.setHeightForWidth(self.plot3.sizePolicy().hasHeightForWidth())
@@ -124,6 +124,16 @@ class Ui_MainWindow(object):
 
         self.gridLayout_3.addWidget(self.plot2, 1, 2, 1, 1)
 
+        self.plot2_combobox = QComboBox(self.tab)
+        self.plot2_combobox.setObjectName(u"plot2_combobox")
+
+        self.gridLayout_3.addWidget(self.plot2_combobox, 2, 2, 1, 1)
+
+        self.plot1_combobox = QComboBox(self.tab)
+        self.plot1_combobox.setObjectName(u"plot1_combobox")
+
+        self.gridLayout_3.addWidget(self.plot1_combobox, 2, 1, 1, 1)
+
         self.plot1 = PlotWidget(self.tab)
         self.plot1.setObjectName(u"plot1")
         sizePolicy1.setHeightForWidth(self.plot1.sizePolicy().hasHeightForWidth())
@@ -132,10 +142,10 @@ class Ui_MainWindow(object):
 
         self.gridLayout_3.addWidget(self.plot1, 1, 1, 1, 1)
 
-        self.plot1_combobox = QComboBox(self.tab)
-        self.plot1_combobox.setObjectName(u"plot1_combobox")
+        self.outputLabel = QLabel(self.tab)
+        self.outputLabel.setObjectName(u"outputLabel")
 
-        self.gridLayout_3.addWidget(self.plot1_combobox, 2, 1, 1, 1)
+        self.gridLayout_3.addWidget(self.outputLabel, 6, 1, 1, 1)
 
         self.tabWidget.addTab(self.tab, "")
         self.tab_2 = QWidget()
@@ -158,6 +168,8 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"MainWindow", None))
         self.label_2.setText(QCoreApplication.translate("MainWindow", u"ROBOSAM", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"Maxwell Studio", None))
+        self.statusLabel.setText("")
+        self.outputLabel.setText("")
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QCoreApplication.translate("MainWindow", u"Tab 1", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), QCoreApplication.translate("MainWindow", u"Tab 2", None))
     # retranslateUi
