@@ -47,7 +47,7 @@ AS5048A::AS5048A(byte CS, SPIClass& spi, uint32_t spiFreq) {
     // Set up SPI settings - SPI MODE 1 because data is captured on the falling edge of the clock
     // and propagated on the rising edge - https://en.wikipedia.org/wiki/Serial_Peripheral_Interface
     _settings = SPISettings(spiFreq, MSBFIRST, SPI_MODE1);
-    _direction = SENSOR_DIRECTION::CW; // Default - may be changed by the init sequence.
+    _direction = SENSOR_DIRECTION::CCW; // Default - may be changed by the init sequence.
     // Set up CS pin
     pinMode(_CS, OUTPUT);
     digitalWrite(_CS, HIGH);

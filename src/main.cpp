@@ -51,6 +51,8 @@ uint8_t buffer[3];
 
 void setup() {
     pinMode(GREEN_LED_PIN, OUTPUT);
+    delay(500);
+
 
     pinMode(PC13, OUTPUT);
     digitalWrite(PC13, HIGH);

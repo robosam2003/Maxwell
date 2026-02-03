@@ -28,14 +28,14 @@ namespace Maxwell {
             DRV8323_HI_B_PIN,
             DRV8323_HI_C_PIN,
             DRV8323_GATE_EN_PIN);
-        encoder = new AS5048A (
-            AS5047P_CS_PIN,
-            SPI_1,
-            1000000); // 1 MHz SPI frequency
-        // encoder = new AS5048A ( // External encoder
-        //     EXTERNAL_ENCODER_CS_PIN,
-        //     SPI_2,
-        //     10000); // 1 MHz SPI frequency
+        // encoder = new AS5048A ( // Internal encoder
+        //     AS5047P_CS_PIN,
+        //     SPI_1,
+        //     1000000); // 1 MHz SPI frequency
+        encoder = new AS5048A ( // External encoder
+            EXTERNAL_ENCODER_CS_PIN,
+            SPI_2,
+            10000); // 1 MHz SPI frequency
 
         pwm_input = new PWMInput(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
 
@@ -373,7 +373,7 @@ namespace Maxwell {
         float zero_angle = encoder->get_angle();
 
         float theta = 0;
-        for (long i=0; i<60000; i++) {
+        for (long i=0; i<10000; i++) {
             theta += 0.001;
             // theta = fmod(theta, _2PI);
             encoder->update();
@@ -383,7 +383,7 @@ namespace Maxwell {
         }
         encoder->update();
         float top_angle = encoder->get_angle();
-        for (long i=0; i<60000; i++) {
+        for (long i=0; i<10000; i++) {
             theta -= 0.001;
             // theta = fmod(theta, _2PI);
             encoder->update();
@@ -818,15 +818,15 @@ namespace Maxwell {
         auto input_lpf = RCFilter(2.0);
 
 
-        double step_period = 2.0; // seconds
+        double step_period = 0.3; // seconds
         uint32_t step_period_start = millis();
-        double high_angle = 2.0 * PI * 3; // 3 revolutions
-        double low_angle = - high_angle; // 0 revolutions
+        double high_angle = -0.5; // 3 revolutions
+        double low_angle = -2.0 * PI * 6.0; // 0 revolutions
         double desired_ramp_to_angle = low_angle; // radians
 
 
         double desired_angle = 0.0;
-        float thresh = 2.0;
+        float thresh = 20.0; // 20A current threshold for homing
         float position_offset = 0.0;
 
 
@@ -838,28 +838,32 @@ namespace Maxwell {
             current_time_us = micros();
             current_time_ms = millis();
 
-            // Trapezoidal reference generator
-            // if (current_time_ms - step_period_start >= (step_period * 1000.0)) {
-            //     step_period_start = current_time_ms;
-            //     desired_ramp_to_angle = (desired_ramp_to_angle == low_angle) ? high_angle : low_angle;
-            // }
-            // else {
-            //     double ramp_step_percentage = 0.5;
-            //     double ramp_duration = step_period * ramp_step_percentage;
-            //     double elapsed = (current_time_ms - step_period_start) / 1000.0; // Convert to seconds
-            //     double ramp_progress = elapsed / ramp_duration; // 0 to 1
-            //     if (elapsed <= ramp_duration) {
-            //         if (desired_ramp_to_angle == low_angle) {
-            //             desired_angle = high_angle - (high_angle - low_angle) * ramp_progress;
-            //         } else if (desired_ramp_to_angle == high_angle) {
-            //             desired_angle = low_angle + (high_angle - low_angle) * ramp_progress;
-            //         }
-            //     } else {
-            //         desired_angle = desired_ramp_to_angle;
-            //     }
-            // }
+
             if (homed) {
-                desired_angle = input_lpf.update(-pwm_input->read_percentage() / 100.0 * 2*PI * 6.25 + position_offset, current_time_us);
+                desired_angle = input_lpf.update(-pwm_input->read_percentage() / 100.0 * 2*PI * 5 + position_offset, current_time_us);
+
+                // Trapezoidal reference generator
+            //     if (current_time_ms - step_period_start >= (step_period * 1000.0)) {
+            //         step_period_start = current_time_ms;
+            //         desired_ramp_to_angle = (desired_ramp_to_angle == low_angle) ? high_angle : low_angle;
+            //     }
+            //     else {
+            //         double ramp_step_percentage = 1.0;
+            //         double ramp_duration = step_period * ramp_step_percentage;
+            //         double elapsed = (current_time_ms - step_period_start) / 1000.0; // Convert to seconds
+            //         double ramp_progress = elapsed / ramp_duration; // 0 to 1
+            //         if (elapsed <= ramp_duration) {
+            //             if (desired_ramp_to_angle == low_angle) {
+            //                 desired_angle = high_angle - (high_angle - low_angle) * ramp_progress;
+            //             } else if (desired_ramp_to_angle == high_angle) {
+            //                 desired_angle = low_angle + (high_angle - low_angle) * ramp_progress;
+            //             }
+            //         } else {
+            //             desired_angle = desired_ramp_to_angle;
+            //         }
+            //     }
+            //     desired_angle += position_offset;
+            //     desired_angle = input_lpf.update(desired_angle, current_time_us);
             }
             position_pid_controller.set_setpoint(desired_angle);
 
@@ -894,7 +898,7 @@ namespace Maxwell {
             dq_meas.q = q_lpf.update(dq_meas.q, current_time_us);
 
             // Update the PID controllers
-            dq_struct command_dq = {0, I_q};
+            dq_struct command_dq = {0, I_q}; // Running in pure voltage mode - Not very energy efficient
             // command_dq.d = command_d_lpf.update(d_pid_controller.update(dq_meas.d), current_time_us);
             // command_dq.q = command_q_lpf.update(q_pid_controller.update(dq_meas.q), current_time_us);
             alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta);
@@ -909,7 +913,7 @@ namespace Maxwell {
 
                 if (abs(currents.current_a) > thresh || abs(currents.current_b) > thresh || abs(currents.current_c) > thresh) {
                     homed = true;
-                    position_offset = theta;
+                    position_offset = theta - 0.5;
 
                     // encoder->set_offset(theta);
                     desired_angle = position_offset;

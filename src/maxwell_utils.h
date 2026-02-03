@@ -85,7 +85,13 @@ public:
 
 
 struct motorTypeSchema {
+    enum MOTOR_DIRECTION {
+        CW = 1,
+        CCW = -1
+    };
+
 public:
+    MOTOR_DIRECTION direction;
     uint32_t pole_pairs;
     uint32_t phase_resistance;
     uint32_t phase_inductance;
@@ -98,7 +104,6 @@ public:
 
 struct BLDCmotorSchema : public motorTypeSchema {
 public:
-
 };
 
 struct controlConfig {
@@ -108,6 +113,7 @@ struct controlConfig {
     MOTOR_TYPE motor_type;
     COMMAND_SOURCE command_source;
     TELEMETRY_DESTINATION telemetry_destination;
+    BLDCmotorSchema motor;
 };
 
 
