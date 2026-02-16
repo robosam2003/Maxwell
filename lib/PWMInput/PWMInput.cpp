@@ -40,8 +40,8 @@ void PWMInput::pwm_callback() {
     }
 }
 
-uint32_t PWMInput::read() {
-    return _pwm_value;
+float PWMInput::read() {
+    return read_percentage();
 }
 
 float PWMInput::read_percentage() {

@@ -9,7 +9,8 @@
 
 /*  Maxwell control architecture
  *  The main control loop of Maxwell requires a single configuration / schema to be input to it to run things
- *   control_mode | Distinguishes motor control modes
+ *
+ *  control_mode | Distinguishes motor control modes
  *      POSITION
  *      VELOCITY
  *      TORQUE
@@ -35,6 +36,11 @@
  *    USB
  */
 
+enum MOTOR_TYPE {
+    BLDC,
+    DC
+};
+
 enum CONTROL_MODE {
     POSITION,
     VELOCITY,
@@ -53,11 +59,6 @@ enum TORQUE_CONTROL_MODE {
     CURRENT
 };
 
-enum MOTOR_TYPE {
-    BLDC,
-    DC
-};
-
 enum COMMAND_SOURCE {
     PWM,
     UART,
@@ -65,23 +66,11 @@ enum COMMAND_SOURCE {
     USB
 };
 
-enum TELEMETRY_DESTINATION {
+enum TELEMETRY_TARGET {
     TELEMETRY_UART,
     TELEMETRY_CAN,
     TELEMETRY_USB
 };
-
-struct sensorTypeSchema {
-public:
-    uint8_t sensor_type;
-};
-
-struct sensoredSchema : public sensorTypeSchema {
-public:
-
-};
-
-
 
 
 struct motorTypeSchema {
@@ -92,9 +81,6 @@ struct motorTypeSchema {
 
 public:
     MOTOR_DIRECTION direction;
-    uint32_t pole_pairs;
-    uint32_t phase_resistance;
-    uint32_t phase_inductance;
 };
 
 struct DCmotorSchema : public motorTypeSchema {
@@ -104,15 +90,19 @@ public:
 
 struct BLDCmotorSchema : public motorTypeSchema {
 public:
+    uint32_t pole_pairs;
+    uint32_t phase_resistance;
+    uint32_t phase_inductance;
+
 };
 
 struct controlConfig {
+    COMMAND_SOURCE command_source;
+    TELEMETRY_TARGET telemetry_target;
+    MOTOR_TYPE motor_type;
     CONTROL_MODE control_mode;
     SENSOR_TYPE sensor_type;
     TORQUE_CONTROL_MODE torque_control_mode;
-    MOTOR_TYPE motor_type;
-    COMMAND_SOURCE command_source;
-    TELEMETRY_DESTINATION telemetry_destination;
     BLDCmotorSchema motor;
 };
 

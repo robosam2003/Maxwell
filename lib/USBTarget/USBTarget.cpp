@@ -4,7 +4,9 @@
 
 #include "USBTarget.h"
 
-void USBTarget::initialize() {
+
+USBTarget::USBTarget() {
+    // Initialisation
     serial.begin(baud_rate);
 }
 

@@ -20,6 +20,8 @@
 #include "maxwell_utils.h"
 #include "TelemetryTarget.h"
 #include "USBTarget.h"
+#include "CommandSource.h"
+#include "CANBus.h"
 
 
 namespace Maxwell {
@@ -125,16 +127,24 @@ namespace Maxwell {
         //     .values = {0.0, 0.0}
         // };
 
-        TelemetryTarget* telemetry;
 
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
         PositionSensor* encoder;
         CurrentSensors* current_sensors;
 
+        // Command Sources / Telemetry Targets
+        PWMInput* pwm_input;
+        CANBus* can_bus;
+        USBTarget* usb_target;
+
+
+        controlConfig config;
+        CommandSource* command_source;
+        TelemetryTarget* telemetry;
+
         PIDController* pid_controller; // for hall mode
         triggered* trigger;
-        PWMInput* pwm_input;
 
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
@@ -170,6 +180,14 @@ namespace Maxwell {
         void all_off();
 
         void foc_init_sequence();
+
+        void load_control_config();
+
+        void bldc_control();
+
+
+
+
 
         void sinusoidal_position_control();
 

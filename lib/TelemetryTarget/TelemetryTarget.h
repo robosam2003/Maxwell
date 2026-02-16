@@ -17,6 +17,7 @@ enum TELEMETRY_PACKET_TYPE : uint8_t {
     DQ_CURRENTS,
     BUS_VOLTAGE,
     COMMAND_VOLTAGES,
+    COMMAND,
 };
 struct telemetry_packet {
     TELEMETRY_PACKET_TYPE type;
@@ -26,7 +27,6 @@ struct telemetry_packet {
 class TelemetryTarget {
 
 public:
-    virtual void initialize();
     virtual void send(const telemetry_packet& packet);
     virtual ~TelemetryTarget() = default;
 };

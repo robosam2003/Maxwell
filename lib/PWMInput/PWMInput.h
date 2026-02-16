@@ -6,6 +6,7 @@
 #define PWMINPUT_H
 
 #include "Arduino.h"
+#include "CommandSource.h"
 
 enum INPUT_MODE {
   UNIDIRECTIONAL,
@@ -18,7 +19,7 @@ enum DIRECTION {
 };
 
 
-class PWMInput {
+class PWMInput : public CommandSource {
 private:
     int _input_pin;
     INPUT_MODE _input_mode;
@@ -37,11 +38,13 @@ public:
 
     PWMInput(int input_pin, INPUT_MODE input_mode, DIRECTION direction);
 
+
+
     void set_callback(void (*interrupt_callback)());
 
     void pwm_callback();
 
-    uint32_t read();
+    float read() override; // Override the read method from CommandSource
 
     float read_percentage();
 };

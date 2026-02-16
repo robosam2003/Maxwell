@@ -15,8 +15,6 @@ namespace Maxwell {
     Maxwell *Maxwell::instance = nullptr;
 
     Maxwell::Maxwell()  {
-        telemetry = new USBTarget();
-        telemetry->initialize();
 
         SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
         SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
@@ -28,18 +26,31 @@ namespace Maxwell {
             DRV8323_HI_B_PIN,
             DRV8323_HI_C_PIN,
             DRV8323_GATE_EN_PIN);
-        // encoder = new AS5048A ( // Internal encoder
-        //     AS5047P_CS_PIN,
-        //     SPI_1,
-        //     1000000); // 1 MHz SPI frequency
-        encoder = new AS5048A ( // External encoder
-            EXTERNAL_ENCODER_CS_PIN,
-            SPI_2,
-            10000); // 1 MHz SPI frequency
 
+        // TODO: Make the choice between internal and external encoder a config option
+        encoder = new AS5048A ( // Internal encoder
+            AS5047P_CS_PIN,
+            SPI_1,
+            1000000); // 1 MHz SPI frequency
+        // encoder = new AS5048A ( // External encoder
+        //     EXTERNAL_ENCODER_CS_PIN,
+        //     SPI_2,
+        //     10000); // 1 MHz SPI frequency
+
+
+        /*
+         * Instantiate all Command Sources and Telemetry Targets
+         */
+        // Command Sources
         pwm_input = new PWMInput(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
+        can_bus = new CANBus(500000); // Also a Telemetry target
 
-        trigger = new triggered{false, false, false};
+        // Telemetry Targets
+        usb_target = new USBTarget();
+
+
+
+        // trigger = new triggered{false, false, false};
         pid_controller = new PIDController(0.2, 2, 0,
             0,
             static_cast<float>(MAX_LEVEL),
@@ -210,7 +221,6 @@ namespace Maxwell {
         pwm_3x->channel_c = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin_c), PinMap_PWM));
         pwm_3x->TIM_C = new HardwareTimer(Instance_c);
         // pwm_3x->TIM_C->setPrescaleFactor(prescale_value);
-
 
         sync_pwm();
 
@@ -480,6 +490,62 @@ namespace Maxwell {
         //     i++;
         // }
         // set_phase_voltages(0, 0, 0);
+    }
+
+    void Maxwell::load_control_config() {
+        switch (config.command_source) {
+            case (COMMAND_SOURCE::PWM): {command_source = pwm_input; break;}
+            case (COMMAND_SOURCE::CAN): {command_source = can_bus; break;}
+            default: break;
+        }
+        switch (config.telemetry_target) {
+            case (TELEMETRY_TARGET::TELEMETRY_USB): {telemetry = usb_target; break;}
+            case (TELEMETRY_TARGET::TELEMETRY_CAN): {telemetry = can_bus; break;}
+            default: break;
+        }
+
+        // Interpret the current config, and call the relevant control loop (e.g. sinusoidal position control, voltage control, current control etc.)
+        switch (config.motor_type) {
+            case (MOTOR_TYPE::DC): {
+                // dc_control();
+                break;
+            }
+            case (MOTOR_TYPE::BLDC): {
+                bldc_control();
+                break;
+            }
+        }
+    }
+
+    void Maxwell::bldc_control() {
+        // Initialise 3x PWM generation on the STM32
+        init_pwm_3x();
+
+        // Setup components for bldc_control
+        driver->enable(true); // Enable driver in 3x mode
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
+
+        switch (config.control_mode) {
+            case (CONTROL_MODE::TORQUE): {
+                while (true) {
+                    // Read torque command from command source and convert to voltage command
+                    float torque_command = command_source->read();
+
+                    encoder->update();
+                    telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {torque_command}});
+                    telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
+                    telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {encoder->get_velocity()}});
+                }
+                break;
+            }
+
+
+
+
+        }
+
+
+
     }
 
     void Maxwell::sinusoidal_position_control() {
@@ -776,6 +842,11 @@ namespace Maxwell {
         digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
         digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
+
+        // Tuning method:
+        // Tune q and d axis controllers properly, then assume they are ideal
+        // Tune
+
 
         PIDController d_pid_controller =
             PIDController(  2.0,

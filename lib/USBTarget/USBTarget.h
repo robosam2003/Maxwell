@@ -17,9 +17,8 @@ private:
     uint8_t buffer[512] = {};
     uint8_t buffer_pointer = 0;
     int baud_rate = 921600;
-
 public:
-    void initialize() override;
+    USBTarget();
     void send(const telemetry_packet& packet) override;
     static void generate_checksum(uint8_t* data, size_t length);
 

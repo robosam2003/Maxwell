@@ -189,6 +189,13 @@ namespace DRV8323 {
         data = data | (mode << 5);   // Set the PWM_MODE bits
         Serial.println(data);
         write_reg(REGISTER::DRIVER_CONTROL, data);
+
+        // Tie all low side pins HIGH to avoid hi-z state in 3x PWM mode.
+        if (mode == PWM_MODE::PWM_3x) {
+            digitalWrite(DRV8323_LO_A_PIN, HIGH);
+            digitalWrite(DRV8323_LO_B_PIN, HIGH);
+            digitalWrite(DRV8323_LO_C_PIN, HIGH);
+        }
     }
 
     void DRV8323::set_current_gain(CSA_GAIN gain) {
