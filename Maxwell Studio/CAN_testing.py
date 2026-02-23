@@ -1,5 +1,6 @@
 import can
 import time
+import struct
 # Candlelight firmware on Linux
 #bus = can.interface.Bus(bustype='socketcan', channel='can0', bitrate=500000)
 
@@ -42,6 +43,14 @@ while True:
         message = bus.recv(timeout=1)
         if message is not None:
             print("Received message: {}".format(message))
+            # Interpret floats
+            data = message.data[1:]
+            for i in range(0, len(data), 4):
+                if i + 4 <= len(data):
+                    float_bytes = data[i:i+4]
+                    float_value = struct.unpack('<f', bytes(float_bytes))[0]
+                    print("Float value: {}".format(float_value))
+
     except Exception as e:
         print("Error receiving message: {}".format(e))
         bus.shutdown()

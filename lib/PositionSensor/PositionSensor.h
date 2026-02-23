@@ -10,6 +10,7 @@ enum SENSOR_DIRECTION {
     CCW = -1
 };
 
+#include "RCFilter.h"
 
 class PositionSensor {
 public:
@@ -21,6 +22,10 @@ public:
     float offset                = 0.0; // Motor-sensor offset (radians)
 
     float velocity              = 0.0; // radians per second
+
+    float pos_lpf_cutoff = 10.0;
+    RCFilter* pos_lpf = new RCFilter(pos_lpf_cutoff);
+    bool pos_filtered = false;
 
 
     SENSOR_DIRECTION _direction; // CW or CCW

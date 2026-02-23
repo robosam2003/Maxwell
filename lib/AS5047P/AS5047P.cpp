@@ -26,7 +26,6 @@ namespace AS5047P {
         // update();
         // float _offset = get_angle(); // Set the offset to the current angle
         // set_offset(_offset);
-
     }
 
     uint16_t AS5047P::read_reg(REGISTER regAddress) {
@@ -82,16 +81,14 @@ namespace AS5047P {
         }
         prev_raw_angle = angle_raw_val;
         absolute_angle = (static_cast<float>(full_rotations) * _2PI) + prev_raw_angle;
-
+        (pos_filtered) ? absolute_angle = pos_lpf->update(absolute_angle, micros()) : 0;
         // Velocity calculation
     }
 
     float AS5047P::get_angle() {
-        // update();
-        if (_direction == CCW) {
-            return -absolute_angle + offset; // Return the absolute angle in radians, adjusted for direction and offset
-        }
-        return absolute_angle + offset; // Return the absolute angle in radians, adjusted for direction and offset
+        float angle = (_direction == CCW) ? -absolute_angle + offset :
+                        absolute_angle + offset; // Return the absolute angle in radians, adjusted for direction and offset
+        return angle;
     }
 
     float AS5047P::get_velocity() {
@@ -109,7 +106,7 @@ namespace AS5047P {
         return velocity;
     }
 
-    float AS5047P::set_offset(float angle) {
+    void AS5047P::set_offset(float angle) {
         offset = angle;
     }
 

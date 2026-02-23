@@ -76,8 +76,8 @@
 #ifdef HARDWARE_V2_0
 
 // AS5047P Magnetic Encoder
-#define AS5047P_SPI_BUS             SPI1
-#define AS5047P_CS_PIN              PC13
+#define AS5048A_SPI_BUS             SPI1
+#define AS5048A_CS_PIN              PC13
 
 // DRV8323SR Gate driver
 #define DRV8323_SPI_BUS             SPI1

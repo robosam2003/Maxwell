@@ -110,4 +110,9 @@ struct controlConfig {
 
 
 
+// #define DEBUG_U32(a) ITM->PORT[x].u32 = *(uint32_t*)&a; // type-punn to desired size: sizeof(float) = sizeof(uint32_t)
+
+
+
+
 #endif //MAXWELL_MAXWELL_UTILS_H

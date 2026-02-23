@@ -7,6 +7,7 @@
 #include <ratio>
 #include <FreeRTOS/Source/include/FreeRTOS.h>
 
+#include "AS5047P.h"
 #include "FreeRTOS/Source/include/FreeRTOS.h"
 
 namespace Maxwell {
@@ -29,7 +30,7 @@ namespace Maxwell {
 
         // TODO: Make the choice between internal and external encoder a config option
         encoder = new AS5048A ( // Internal encoder
-            AS5047P_CS_PIN,
+            AS5048A_CS_PIN,
             SPI_1,
             1000000); // 1 MHz SPI frequency
         // encoder = new AS5048A ( // External encoder
@@ -371,15 +372,14 @@ namespace Maxwell {
     void Maxwell::foc_init_sequence() {
         float old_max_voltage = max_voltage;
 
-        driver->enable(true);
-        // Ensure 3x PWM setup
-        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
-        digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
-        digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
-        digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
+        // Initialise 3x PWM generation on the STM32
+        init_pwm_3x();
+
+        // Setup components for bldc_control
+        driver->enable(true); // Enable driver in 3x mode
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
         encoder->update();
-
         float zero_angle = encoder->get_angle();
 
         float theta = 0;
@@ -494,13 +494,26 @@ namespace Maxwell {
 
     void Maxwell::load_control_config() {
         switch (config.command_source) {
-            case (COMMAND_SOURCE::PWM): {command_source = pwm_input; break;}
-            case (COMMAND_SOURCE::CAN): {command_source = can_bus; break;}
+            case (COMMAND_SOURCE::PWM): {
+                command_source = pwm_input;
+                // command_source->command_gain = 1.0;
+                break;
+            }
+            case (COMMAND_SOURCE::CAN): {
+                command_source = can_bus;
+                break;
+            }
             default: break;
         }
         switch (config.telemetry_target) {
-            case (TELEMETRY_TARGET::TELEMETRY_USB): {telemetry = usb_target; break;}
-            case (TELEMETRY_TARGET::TELEMETRY_CAN): {telemetry = can_bus; break;}
+            case (TELEMETRY_TARGET::TELEMETRY_USB): {
+                telemetry = usb_target;
+                break;
+            }
+            case (TELEMETRY_TARGET::TELEMETRY_CAN): {
+                telemetry = can_bus;
+                break;
+            }
             default: break;
         }
 
@@ -525,27 +538,47 @@ namespace Maxwell {
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
+        uint32_t prev_millis = millis();
         switch (config.control_mode) {
             case (CONTROL_MODE::TORQUE): {
                 while (true) {
                     // Read torque command from command source and convert to voltage command
-                    float torque_command = command_source->read();
-
+                    float reference = command_source->read();
                     encoder->update();
-                    telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {torque_command}});
-                    telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->get_angle()}});
-                    telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {encoder->get_velocity()}});
+                    float angle = encoder->get_angle();
+                    float velocity = encoder->get_velocity();
+                    uint32_t current_time = millis();
+
+                    float U_q = reference * max_voltage;
+                    set_phase_voltages({0, U_q});
+
+                    // switch (config.torque_control_mode) {
+                    //     case (TORQUE_CONTROL_MODE::VOLTAGE): {
+                    //
+                    //     }
+                    //     case (TORQUE_CONTROL_MODE::CURRENT): {
+                    //         break;
+                    //     }
+                    //     default: break;
+                    // }
+
+                    if (current_time - prev_millis >= 30) {
+                        telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
+                        telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {angle}});
+                        telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {velocity}});
+                        prev_millis = current_time;
+                    }
                 }
                 break;
-            }
+            };
+            case (CONTROL_MODE::VELOCITY): {
+                while (true) {
 
-
-
-
+                }
+                break;
+            };
+            default: break;
         }
-
-
-
     }
 
     void Maxwell::sinusoidal_position_control() {

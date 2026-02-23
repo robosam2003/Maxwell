@@ -148,7 +148,7 @@ namespace Maxwell {
 
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 7;   // V
+        float max_voltage = 3.0;   // V
         // float align_voltage = 2; // V
         float max_current = 3;   // A
         float align_max_voltage = 1.5;

@@ -59,10 +59,12 @@ AS5048A::AS5048A(byte CS, SPIClass& spi, uint32_t spiFreq) {
 
     // Begin the SPI bus.
     _spi.begin();
+
 }
 
 void AS5048A::update() {
     prev_absolute_angle = absolute_angle; // Store the angle from previous update
+    uint32_t current_time = micros();
 
     uint16_t angle = read_reg(REGISTER::ANGLE);
     float angle_raw_val = (static_cast<float>(angle) / 16384.0f) * _2PI; // Convert to radians
@@ -72,6 +74,7 @@ void AS5048A::update() {
     }
     prev_raw_angle = angle_raw_val;
     absolute_angle = (static_cast<float>(full_rotations) * _2PI) + prev_raw_angle;
+    // (pos_filtered) ? absolute_angle = pos_lpf->update(absolute_angle, current_time) : 0;
 }
 
 float AS5048A::get_angle() {

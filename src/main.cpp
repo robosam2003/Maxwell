@@ -9,7 +9,7 @@
 
 Maxwell::Maxwell maxwell;
 
-
+float t = 2.123;
 controlConfig config = {
     COMMAND_SOURCE::PWM,
     TELEMETRY_TARGET::TELEMETRY_USB,
@@ -38,5 +38,4 @@ void setup() {
 
 void loop() {
     maxwell.load_control_config();
-
 }

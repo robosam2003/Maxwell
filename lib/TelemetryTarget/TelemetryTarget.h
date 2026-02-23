@@ -19,6 +19,7 @@ enum TELEMETRY_PACKET_TYPE : uint8_t {
     COMMAND_VOLTAGES,
     COMMAND,
 };
+
 struct telemetry_packet {
     TELEMETRY_PACKET_TYPE type;
     std::vector<float> data;

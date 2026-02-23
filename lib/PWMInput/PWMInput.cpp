@@ -41,10 +41,10 @@ void PWMInput::pwm_callback() {
 }
 
 float PWMInput::read() {
-    return read_percentage();
+    return read_percentage() * command_gain;
 }
 
 float PWMInput::read_percentage() {
     _pwm_value = constrain(_pwm_value, _bottom_threshold, _top_threshold);
-    return ((_pwm_value - _bottom_threshold) * 100.0f / (_top_threshold - _bottom_threshold));
+    return ((_pwm_value - _bottom_threshold) * 1.0f / (_top_threshold - _bottom_threshold));
 }

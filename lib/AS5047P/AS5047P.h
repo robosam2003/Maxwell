@@ -4,13 +4,14 @@
 #include "Arduino.h"
 #include <SPI.h>
 #include "AS5047P_constants.h"
+#include "PositionSensor.h"
 
 #ifndef MAXWELL_AS5047P_H
 #define MAXWELL_AS5047P_H
 
 namespace AS5047P {
 
-    class AS5047P {
+    class AS5047P : public PositionSensor {
     public:
 
         byte _CS;
@@ -42,7 +43,7 @@ namespace AS5047P {
 
         float get_velocity();
 
-        float set_offset(float angle);
+        void set_offset(float angle);
 
         uint16_t get_mag_strength();
 
