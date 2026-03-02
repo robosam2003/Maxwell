@@ -1,116 +1,127 @@
 //
-// Created by robos on 18/12/2025.
+// Created by SamScott on 02/03/2026.
 //
 
 #ifndef MAXWELL_MAXWELL_UTILS_H
 #define MAXWELL_MAXWELL_UTILS_H
-#include <cstdint>
-#include "current_sensors.h"
 
-/*  Maxwell control architecture
- *  The main control loop of Maxwell requires a single configuration / schema to be input to it to run things
- *
- *  control_mode | Distinguishes motor control modes
- *      POSITION
- *      VELOCITY
- *      TORQUE
- *  sensor_type | Distinguishes position sensor
- *      SENSORLESS
- *      MAGNETIC
- *      HALL_SENSOR
- *      A_B
- *  torque_control_mode | Torque control mode being used
- *      VOLTAGE
- *      CURRENT
- *  motor_type | The type of motor being controlled
- *      BLDC
- *      DC
- *  command_source | Where to read the reference from
- *      PWM
- *      USB
- *      UART
- *      CAN
- *  telemetry_destination | Where to send telemetry data to
- *    UART
- *    CAN
- *    USB
- */
-
-enum MOTOR_TYPE {
-    BLDC,
-    DC
+struct ab_struct {
+    double alpha;
+    double beta;
 };
 
-enum CONTROL_MODE {
-    POSITION,
-    VELOCITY,
-    TORQUE,
+struct dq_struct {
+    double d;
+    double q;
 };
 
-enum SENSOR_TYPE {
-    SENSORLESS,
-    MAGNETIC,
-    HALL_SENSOR,
-    A_B,
+struct PhaseCurrents {
+    double current_a;
+    double current_b;
+    double current_c;
 };
 
-enum TORQUE_CONTROL_MODE {
-    VOLTAGE,
-    CURRENT
+struct Currents {
+    PhaseCurrents phase_currents;
+    ab_struct alpha_beta;
+    dq_struct dq;
 };
 
-enum COMMAND_SOURCE {
-    PWM,
-    UART,
-    CAN,
-    USB
+struct FOC { // Everything that needs initialised must be a pointer
+    RCFilter* q_lpf;
+    RCFilter* d_lpf;
+    RCFilter* velocity_lpf;
+    RCFilter* input_lpf;
+    PIDController* d_pid;
+    PIDController* q_pid;
+    PIDController* position_pid;
+    PIDController* velocity_pid;
+
+    PhaseCurrents phase_current_meas;
+    ab_struct ab_meas;
+    dq_struct dq_meas;
+
+    dq_struct command_dq;
+    ab_struct command_ab;
+    PhaseCurrents command_voltages;  // Are these voltages or currents?
 };
 
-enum TELEMETRY_TARGET {
-    TELEMETRY_UART,
-    TELEMETRY_CAN,
-    TELEMETRY_USB
+struct pwm_3x_struct {
+    HardwareTimer *TIM_A; HardwareTimer *TIM_B; HardwareTimer *TIM_C;
+    uint8_t channel_a; uint8_t channel_b; uint8_t channel_c;
+    uint32_t FREQ;
+    uint32_t RESOLUTION;
+    uint32_t MAX_COMPARE_VALUE; // 2^RESOLUTION - 1
+};
+
+struct limits_struct {
+    float max_voltage;
+    float max_current;
+    float align_voltage;
+    float max_velocity; // in electrical radians per second
+};
+
+struct params_struct {
+    float offset;
+    int csa_gain;
+    uint32_t pwm_frequency;
 };
 
 
-struct motorTypeSchema {
-    enum MOTOR_DIRECTION {
-        CW = 1,
-        CCW = -1
-    };
+// Clarke and Park transforms
+inline ab_struct clarke_transform(const PhaseCurrents &currents) { // currents to alpha-beta
+    // float I_alpha = currents.current_a;
+    // float I_beta = (currents.current_a  + 2*currents.current_b) / _SQRT3;
 
-public:
-    MOTOR_DIRECTION direction;
-};
+    // Altenative Amplitude-invariant version
+    float I_alpha = currents.current_a;
+    float I_beta = (currents.current_b - currents.current_c) / _SQRT3;
 
-struct DCmotorSchema : public motorTypeSchema {
-public:
-
-};
-
-struct BLDCmotorSchema : public motorTypeSchema {
-public:
-    uint32_t pole_pairs;
-    uint32_t phase_resistance;
-    uint32_t phase_inductance;
-
-};
-
-struct controlConfig {
-    COMMAND_SOURCE command_source;
-    TELEMETRY_TARGET telemetry_target;
-    MOTOR_TYPE motor_type;
-    CONTROL_MODE control_mode;
-    SENSOR_TYPE sensor_type;
-    TORQUE_CONTROL_MODE torque_control_mode;
-    BLDCmotorSchema motor;
-};
+    ab_struct ab = {I_alpha, I_beta};
+    return ab;
+}
 
 
+inline dq_struct park_transform(const ab_struct &ab_vec, float theta) { // alpha-beta to dq
+    // the park transform
+    float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
+    float d = ab_vec.alpha * _cos(electrical_theta)  + ab_vec.beta * _sin(electrical_theta);
+    float q = -ab_vec.alpha * _sin(electrical_theta) + ab_vec.beta * _cos(electrical_theta);
+    dq_struct dq = {d, q};
+    return dq;
+}
+
+inline ab_struct reverse_park_transform(const dq_struct &dq_vec, float theta) {  // dq to alpha-beta
+    float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
+    double c = _cos(electrical_theta);
+    double s = _sin(electrical_theta);
+    float alpha = dq_vec.d * c - dq_vec.q * s;
+    float beta  = dq_vec.d * s + dq_vec.q * c;
+    ab_struct alpha_beta = {alpha, beta};
+    return alpha_beta;
+}
+
+inline PhaseCurrents reverse_clarke_transform(const ab_struct &ab_vec) {
+    // PhaseCurrents currents = {(2/3)*ab_vec.alpha,
+    //                     (-1/3)*ab_vec.alpha + (sqrt(3)/3)*ab_vec.beta,
+    //                     (-1/3)*ab_vec.alpha - (sqrt(3)/3)*ab_vec.beta};
+    PhaseCurrents currents;
+    currents.current_a = ab_vec.alpha;
+    currents.current_b = (-ab_vec.alpha + M_SQRT3*ab_vec.beta) / 2;
+    currents.current_c = (-ab_vec.alpha - M_SQRT3*ab_vec.beta) / 2;
+    return currents;
+}
 
 
 
-// #define DEBUG_U32(a) ITM->PORT[x].u32 = *(uint32_t*)&a; // type-punn to desired size: sizeof(float) = sizeof(uint32_t)
+
+
+
+
+
+
+
+
 
 
 

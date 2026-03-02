@@ -17,141 +17,65 @@
 #include "pid_controller.h"
 #include "PWMInput.h"
 #include "current_sensors.h"
+#include "maxwell_config.h"
 #include "maxwell_utils.h"
 #include "TelemetryTarget.h"
 #include "USBTarget.h"
 #include "CommandSource.h"
 #include "CANBus.h"
+#include "ConfigManager.h"
 
 
 namespace Maxwell {
-
-    struct triggered {
-        bool phases[3];
-        bool zero_cross[3];
-    };
-
-    struct FOC {
-        PIDController* d_pid;
-        PIDController* q_pid;
-        PIDController* position_pid;
-    };
-
-    struct alpha_beta_struct {
-        double alpha;
-        double beta;
-    };
-
-    struct dq_struct {
-        double d;
-        double q;
-    };
-
-    struct PhaseCurrents {
-        double current_a;
-        double current_b;
-        double current_c;
-    };
-
-    struct Currents {
-        PhaseCurrents phase_currents;
-        alpha_beta_struct alpha_beta;
-        dq_struct dq;
-    };
-
-    struct pwm_3x_struct {
-        HardwareTimer *TIM_A;
-        HardwareTimer *TIM_B;
-        HardwareTimer *TIM_C;
-        uint8_t channel_a;
-        uint8_t channel_b;
-        uint8_t channel_c;
-        uint32_t FREQ;
-        uint32_t RESOLUTION;
-        uint32_t MAX_COMPARE_VALUE; // 2^RESOLUTION - 1
-
-        uint8_t PIN_A_STATE;
-        uint8_t PIN_B_STATE;
-        uint8_t PIN_C_STATE;
-
-        uint32_t prev_cnt_a;
-        uint32_t prev_cnt_b;
-        uint32_t prev_cnt_c;
-
-        bool rising_a;
-        bool rising_b;
-        bool rising_c;
-    };
-
-
     class Maxwell {
+
+        // The default configuration
+        maxwell_config default_config_struct = {
+            COMMAND_SOURCE::PWM,
+            TELEMETRY_TARGET::TELEMETRY_USB,
+            MOTOR_TYPE::BLDC,
+            CONTROL_MODE::TORQUE,
+            SENSOR_TYPE::MAGNETIC,
+            TORQUE_CONTROL_MODE::CURRENT,
+            POLE_PAIRS_6374,
+            0.0,
+            {2.0, 0, 0, limits.max_current, 1},
+            {2.0, 0, 0, limits.max_current, 3},
+            {0.05, 1.0, 0, 20, 20},
+            {20, 0, 0, limits.max_velocity, limits.max_velocity},
+            {true, 0.5},
+            {true, 0.5},
+            {true, 2.0},
+            {true, 2.0}
+            };
     public:
-
-        // float_frame command_voltage_frame = {
-        //     .name = "Command Voltage",
-        //     .values = {0.0, 0.0, 0.0}
-        // };
-        // float_frame phase_current_frame = {
-        //     .name = "Phase Current",
-        //     .values = {0.0, 0.0, 0.0}
-        // };
-        // float_frame rotor_position_frame = {
-        //     .name = "Rotor Position",
-        //     .values = {0.0}
-        // };
-        // float_frame rotor_velocity_frame = {
-        //     .name = "Rotor Velocity",
-        //     .values = {0.0}
-        // };
-        // // float_frame
-        // // float_frame
-        // string_frame nameset_frame = {
-        //     .name = "Nameset",
-        //     .values = {}
-        // };
-        //
-        // float_frame alpha_beta_frame = {
-        //     .name = "Alpha-Beta",
-        //     .values = {0.0, 0.0}
-        // };
-        // float_frame dq_frame = {
-        //     .name = "dq",
-        //     .values = {0.0, 0.0}
-        // };
-        // float_frame command_dq_frame = {
-        //     .name = "command dq",
-        //     .values = {0.0, 0.0}
-        // };
-        // float_frame command_alpha_beta_frame = {
-        //     .name = "command alpha-beta",
-        //     .values = {0.0, 0.0}
-        // };
-
-
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
         PositionSensor* encoder;
         CurrentSensors* current_sensors;
 
         // Command Sources / Telemetry Targets
+        CommandSource* command_source;
         PWMInput* pwm_input;
         CANBus* can_bus;
+        TelemetryTarget* telemetry;
         USBTarget* usb_target;
 
+        // Control Config
+        ConfigManager config_manager;
+        maxwell_config config;
+        test_config t_config;
 
-        controlConfig config;
-        CommandSource* command_source;
-        TelemetryTarget* telemetry;
-
-        PIDController* pid_controller; // for hall mode
-        triggered* trigger;
-
+        FOC foc;
+        limits_struct limits = { // Absorb into config struct?
+            .max_voltage = 10.0,
+            .max_current = 5.0,
+            .align_voltage = 1.5,
+            .max_velocity = 250.0 // in electrical radians per second
+        };
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
-        float max_voltage = 3.0;   // V
         // float align_voltage = 2; // V
-        float max_current = 3;   // A
-        float align_max_voltage = 1.5;
         float offset = 0.1; // V
         int _csa_gain = 20;
 
@@ -165,8 +89,6 @@ namespace Maxwell {
 
         void init_pwm_6x();
 
-        void sync_timer_frequencies(long pwm_frequency);
-
         void sync_pwm();
 
         void set_pwm(uint32_t Ua, uint32_t Ub, uint32_t Uc, uint32_t resolution);
@@ -179,16 +101,18 @@ namespace Maxwell {
 
         void all_off();
 
-        void foc_init_sequence();
+        void sensor_offset_calibration();
 
         void load_control_config();
+
+        void motor_control();
 
         void bldc_control();
 
 
 
 
-
+        // legacy control loops - to be removed once the new control loop structure is in place
         void sinusoidal_position_control();
 
         void voltage_torque_control();
@@ -201,21 +125,6 @@ namespace Maxwell {
 
 
 
-        alpha_beta_struct clarke_transform(PhaseCurrents currents);  // Currents to alpha-beta
-
-        dq_struct park_transform(alpha_beta_struct ab_vec, float theta);  // Alpha-beta to dq
-
-        alpha_beta_struct reverse_park_transform(dq_struct dq_vec, float theta);  // dq to alpha-beta
-
-        PhaseCurrents reverse_clarke_transform(alpha_beta_struct ab_vec);   // alpha-beta to currents
-
-        void drive_hall_velocity();
-
-        void drive_velocity(int velocity, int duration);
-
-
-
-        // static void driver_error_task(void *pvParameters);
     };
 }
 #endif //MAXWELL_MAXWELL_H

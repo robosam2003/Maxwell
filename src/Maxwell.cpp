@@ -15,21 +15,21 @@ namespace Maxwell {
     #define MAX_SPEED 2000 // electrical rads/s
     Maxwell *Maxwell::instance = nullptr;
 
-    Maxwell::Maxwell()  {
-
+    Maxwell::Maxwell() {
         SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
         SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
         driver = new DRV8323::DRV8323(
             DRV8323_CS_PIN,
             SPI_1,
-            1000000, // 1 MHz SPI frequency - This is the max frequency for HARDWARE_V2_0 due to parasitics on the SDO line.
+            1000000,
+            // 1 MHz SPI frequency - This is the max frequency for HARDWARE_V2_0 due to parasitics on the SDO line.
             DRV8323_HI_A_PIN,
             DRV8323_HI_B_PIN,
             DRV8323_HI_C_PIN,
             DRV8323_GATE_EN_PIN);
 
         // TODO: Make the choice between internal and external encoder a config option
-        encoder = new AS5048A ( // Internal encoder
+        encoder = new AS5048A( // Internal encoder
             AS5048A_CS_PIN,
             SPI_1,
             1000000); // 1 MHz SPI frequency
@@ -49,20 +49,12 @@ namespace Maxwell {
         // Telemetry Targets
         usb_target = new USBTarget();
 
-
-
-        // trigger = new triggered{false, false, false};
-        pid_controller = new PIDController(0.2, 2, 0,
-            0,
-            static_cast<float>(MAX_LEVEL),
-            30);
         current_sensors = new CurrentSensors(CURR_SENSE_A_PIN,
-                                            CURR_SENSE_B_PIN,
-                                            CURR_SENSE_C_PIN,
-                                            _csa_gain);
+                                             CURR_SENSE_B_PIN,
+                                             CURR_SENSE_C_PIN,
+                                             _csa_gain);
 
         pwm_3x = new pwm_3x_struct();
-        pwm_3x->PIN_A_STATE = 0; pwm_3x->PIN_B_STATE = 0; pwm_3x->PIN_C_STATE = 0;
         encoder->_direction = SENSOR_DIRECTION::CW; // Confirmed via testing
 
         instance = this;
@@ -92,9 +84,9 @@ namespace Maxwell {
         driver->set_dead_time(DRV8323::DEAD_TIMES::DEAD_TIME_400NS);
 
         // Tie the low side pins HIGH to avoid hi-z state - Only in PWM_3X mode
-        digitalWriteFast(DRV8323_LO_A_PIN, 1);
-        digitalWriteFast(DRV8323_LO_B_PIN, 1);
-        digitalWriteFast(DRV8323_LO_C_PIN, 1);
+        digitalWriteFast(DRV8323_LO_A_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_B_PIN, HIGH);
+        digitalWriteFast(DRV8323_LO_C_PIN, HIGH);
 
 
         pinMode(DRV8323_GATE_EN_PIN, OUTPUT);
@@ -112,6 +104,22 @@ namespace Maxwell {
         // pinMode(DRV8323_CURR_SENSE_A_PIN, INPUT); // PB_0 - ADC1_IN8
         // pinMode(DRV8323_CURR_SENSE_B_PIN, INPUT); // PC_5 - ADC1_IN15
         // pinMode(DRV8323_CURR_SENSE_C_PIN, INPUT); // PC_4 - ADC1_IN14
+
+        // Default config - only if we're not loading from flash
+        config = default_config_struct;
+        load_control_config();
+
+        t_config = config_manager.read_config(); // Try to read the config from flash
+
+        if (not t_config.configured) {
+            sensor_offset_calibration();
+        }
+        else {
+            encoder->set_offset(t_config.offset);
+        }
+
+        telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {t_config.offset}});
+
 
         Serial.println("Maxwell setup complete");
     }
@@ -281,29 +289,6 @@ namespace Maxwell {
 
     }
 
-    void Maxwell::sync_timer_frequencies(long pwm_frequency) {
-        auto timers = {pwm_3x->TIM_A, pwm_3x->TIM_B, pwm_3x->TIM_C};
-        uint32_t min_freq = -1;
-        uint32_t max_freq = 0;
-        for (auto timer : {pwm_3x->TIM_A, pwm_3x->TIM_B, pwm_3x->TIM_C}) {
-            uint32_t freq = timer->getTimerClkFreq();
-            if (freq > max_freq) {
-                max_freq = freq;
-            }
-            if (freq < min_freq) {
-                min_freq = freq;
-            }
-        }
-        uint32_t overflow = min_freq / pwm_frequency;
-
-
-        for (auto timer : {pwm_3x->TIM_A, pwm_3x->TIM_B, pwm_3x->TIM_C}) {
-            timer->setPrescaleFactor(timer->getTimerClkFreq()/min_freq);
-            timer->setOverflow(overflow, TICK_FORMAT);
-            timer->refresh();
-        }
-    }
-
     void Maxwell::sync_pwm() {
         pwm_3x->TIM_A->pause();
         pwm_3x->TIM_A->refresh();
@@ -334,13 +319,13 @@ namespace Maxwell {
 
     void Maxwell::set_phase_voltages(float Va, float Vb, float Vc) {
         float input_voltage = 12;
-        Va = constrain(Va, -max_voltage/2, max_voltage/2) + max_voltage / 2 + offset;
-        Vb = constrain(Vb, -max_voltage/2, max_voltage/2) + max_voltage / 2 + offset;
-        Vc = constrain(Vc, -max_voltage/2, max_voltage/2) + max_voltage / 2 + offset;
+        Va = constrain(Va, -limits.max_voltage/2, limits.max_voltage/2) + limits.max_voltage / 2 + offset;
+        Vb = constrain(Vb, -limits.max_voltage/2, limits.max_voltage/2) + limits.max_voltage / 2 + offset;
+        Vc = constrain(Vc, -limits.max_voltage/2, limits.max_voltage/2) + limits.max_voltage / 2 + offset;
 
-        Va = constrain(Va, offset, max_voltage+offset) / input_voltage * static_cast<float>(pwm_3x->MAX_COMPARE_VALUE);
-        Vb = constrain(Vb, offset, max_voltage+offset) / input_voltage * static_cast<float>(pwm_3x->MAX_COMPARE_VALUE);
-        Vc = constrain(Vc, offset, max_voltage+offset) / input_voltage * static_cast<float>(pwm_3x->MAX_COMPARE_VALUE);
+        Va = constrain(Va, offset, limits.max_voltage+offset) / input_voltage * static_cast<float>(pwm_3x->MAX_COMPARE_VALUE);
+        Vb = constrain(Vb, offset, limits.max_voltage+offset) / input_voltage * static_cast<float>(pwm_3x->MAX_COMPARE_VALUE);
+        Vc = constrain(Vc, offset, limits.max_voltage+offset) / input_voltage * static_cast<float>(pwm_3x->MAX_COMPARE_VALUE);
 
         set_pwm(static_cast<uint32_t>(Va),
             static_cast<uint32_t>(Vb),
@@ -350,7 +335,7 @@ namespace Maxwell {
 
     void Maxwell::set_phase_voltages(const dq_struct &command_dq) {
         encoder->update();
-        alpha_beta_struct command_ab = reverse_park_transform(command_dq, encoder->get_angle());
+        ab_struct command_ab = reverse_park_transform(command_dq, encoder->get_angle());
         PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
         set_phase_voltages(command_voltages.current_a,
                             command_voltages.current_b,
@@ -358,7 +343,7 @@ namespace Maxwell {
     }
 
     void Maxwell::set_phase_voltages(const dq_struct &command_dq, float theta) {
-        alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta/POLE_PAIRS_6374);
+        ab_struct command_ab = reverse_park_transform(command_dq, theta/POLE_PAIRS_6374);
         PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
         set_phase_voltages(command_voltages.current_a,
                             command_voltages.current_b,
@@ -369,42 +354,48 @@ namespace Maxwell {
         set_pwm(0, 0, 0, pwm_3x->RESOLUTION);
     }
 
-    void Maxwell::foc_init_sequence() {
-        float old_max_voltage = max_voltage;
-
+    void Maxwell::sensor_offset_calibration() {
         // Initialise 3x PWM generation on the STM32
         init_pwm_3x();
 
         // Setup components for bldc_control
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
+        // set_phase_voltages(0, 0, 0); // Ensure we're not sending any voltage to the motor
 
         encoder->update();
         float zero_angle = encoder->get_angle();
 
         float theta = 0;
-        for (long i=0; i<10000; i++) {
-            theta += 0.001;
+        for (long i=0; i<50000; i++) {
+            theta += 0.0005;
             // theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta,encoder->get_angle() * POLE_PAIRS_6374}});}
-            set_phase_voltages({align_max_voltage, 0}, theta);
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta,encoder->get_angle() * config.pole_pairs}});
+            }
+            set_phase_voltages({limits.align_voltage, 0}, theta);
         }
         encoder->update();
         float top_angle = encoder->get_angle();
-        for (long i=0; i<10000; i++) {
-            theta -= 0.001;
+        for (long i=0; i<50000; i++) {
+            theta -= 0.0005;
             // theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta, encoder->get_angle() * POLE_PAIRS_6374}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta, encoder->get_angle() * config.pole_pairs}});
             }
-            set_phase_voltages({align_max_voltage, 0}, theta);
+            set_phase_voltages({limits.align_voltage, 0}, theta);
         }
         float bottom_angle = encoder->get_angle();
         // Offset is the bottom angle (we should now be at zero electrical angle)
-        encoder->set_offset(bottom_angle - theta);
+        float off = bottom_angle - theta;
+        encoder->set_offset(off);
+
+        t_config.configured = true;
+        t_config.magic_number = 0xDEADBEEF;
+        t_config.offset = off;
+        config_manager.write_config(t_config);
 
 
         // Calculate CW or CCW encoder configuration
@@ -442,14 +433,14 @@ namespace Maxwell {
         //     delay(10);
         // }
 
-        // set_phase_voltages({align_max_voltage, 0}, 0);
+        // set_phase_voltages({limits.align_voltage, 0}, 0);
         // delay(700);
         // encoder->update();
         // encoder->set_offset(encoder->get_angle());
-        telemetry->send({GENERAL, {zero_angle, top_angle, bottom_angle,
-                                                        static_cast<float>(encoder->_direction),
-                                                        static_cast<float>(encoder->offset)}});
-        set_phase_voltages(0, 0, 0);
+        // telemetry->send({GENERAL, {zero_angle, top_angle, bottom_angle,
+        //                                                 static_cast<float>(encoder->_direction),
+        //                                                 static_cast<float>(encoder->offset)}});
+        // set_phase_voltages(0, 0, 0);
 
         // // wait until current it low
         // double current_a = current_sensors->get_current_a();
@@ -493,6 +484,39 @@ namespace Maxwell {
     }
 
     void Maxwell::load_control_config() {
+        // Populate FOC struct from config
+        foc.d_pid = new PIDController( config.d_pid_config.kp,
+                                        config.d_pid_config.ki,
+                                        config.d_pid_config.kd,
+                                        0.0,
+                                        config.d_pid_config.max_output,
+                                        config.d_pid_config.max_integral);
+        foc.q_pid = new PIDController( config.q_pid_config.kp,
+                                        config.q_pid_config.ki,
+                                        config.q_pid_config.kd,
+                                        0.0,
+                                        config.q_pid_config.max_output,
+                                        config.q_pid_config.max_integral);
+        foc.position_pid = new PIDController(  config.position_pid_config.kp,
+                                                config.position_pid_config.ki,
+                                                config.position_pid_config.kd,
+                                                0.0,
+                                                config.position_pid_config.max_output,
+                                                config.position_pid_config.max_integral);
+        foc.velocity_pid = new PIDController(  config.velocity_pid_config.kp,
+                                                config.velocity_pid_config.ki,
+                                                config.velocity_pid_config.kd,
+                                                0.0,
+                                                config.velocity_pid_config.max_output,
+                                                config.velocity_pid_config.max_integral);
+
+        // LPFs
+        foc.d_lpf = new RCFilter(config.d_lpf_config.cutoff_frequency);
+        foc.q_lpf = new RCFilter(config.q_lpf_config.cutoff_frequency);
+        foc.velocity_lpf = new RCFilter(config.velocity_lpf_config.cutoff_frequency);
+        foc.input_lpf = new RCFilter(config.input_lpf_config.cutoff_frequency);
+
+
         switch (config.command_source) {
             case (COMMAND_SOURCE::PWM): {
                 command_source = pwm_input;
@@ -516,7 +540,9 @@ namespace Maxwell {
             }
             default: break;
         }
+    }
 
+    void Maxwell::motor_control() {
         // Interpret the current config, and call the relevant control loop (e.g. sinusoidal position control, voltage control, current control etc.)
         switch (config.motor_type) {
             case (MOTOR_TYPE::DC): {
@@ -537,9 +563,27 @@ namespace Maxwell {
         // Setup components for bldc_control
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
+        PIDController d_pid =
+                    PIDController(  2.0,
+                                    0.0,
+                                    0.0,
+                                    0.0,
+                                    limits.max_current,
+                                    1);
+        PIDController q_pid =
+            PIDController(  2.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            limits.max_current,
+                            3);
+
+
+
 
         uint32_t prev_millis = millis();
         switch (config.control_mode) {
+            // Torque control mode: i.e. The reference command is a torque.
             case (CONTROL_MODE::TORQUE): {
                 while (true) {
                     // Read torque command from command source and convert to voltage command
@@ -547,26 +591,59 @@ namespace Maxwell {
                     encoder->update();
                     float angle = encoder->get_angle();
                     float velocity = encoder->get_velocity();
-                    uint32_t current_time = millis();
+                    uint32_t current_time_ms = millis();
+                    uint32_t current_time_us = micros();
 
-                    float U_q = reference * max_voltage;
-                    set_phase_voltages({0, U_q});
 
-                    // switch (config.torque_control_mode) {
-                    //     case (TORQUE_CONTROL_MODE::VOLTAGE): {
-                    //
-                    //     }
-                    //     case (TORQUE_CONTROL_MODE::CURRENT): {
-                    //         break;
-                    //     }
-                    //     default: break;
-                    // }
+                    switch (config.torque_control_mode) {
+                        case (TORQUE_CONTROL_MODE::VOLTAGE): {
+                            // TORQUE CONTROL, with TORQUE CONTROL MODE
+                            float U_q = reference * limits.max_voltage;
+                            set_phase_voltages({0, U_q});
+                            break;
+                        }
 
-                    if (current_time - prev_millis >= 30) {
+
+                        case (TORQUE_CONTROL_MODE::CURRENT): {
+                            // Read reference and set q-axis set point
+                            float I_q = reference * limits.max_current;
+                            d_pid.set_setpoint(0.0);
+                            q_pid.set_setpoint(I_q);
+
+                            // // Measure current and transform
+                            foc.phase_current_meas = {current_sensors->get_current_a(),
+                                                        current_sensors->get_current_b(),
+                                                        current_sensors->get_current_c()};
+                            foc.ab_meas = clarke_transform(foc.phase_current_meas);
+                            foc.dq_meas = park_transform(foc.ab_meas, angle);
+
+                            // Filter measured currents
+                            foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
+                            foc.dq_meas.q = foc.q_lpf->update(foc.dq_meas.q, current_time_us);
+
+                            // // Update PID controllers
+                            foc.command_dq.d = d_pid.update(foc.dq_meas.d);
+                            foc.command_dq.q = q_pid.update(foc.dq_meas.q);
+                            //
+                            // // Generate voltage command from PID output
+                            set_phase_voltages(foc.command_dq);
+                            break;
+                        }
+                        default: break;
+                    }
+
+                    if (current_time_ms - prev_millis >= 30) {
                         telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                         telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {angle}});
                         telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {velocity}});
-                        prev_millis = current_time;
+                        telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
+                                                                                        static_cast<float>(foc.phase_current_meas.current_b),
+                                                                                        static_cast<float>(foc.phase_current_meas.current_c)}});
+                        telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
+                                                                                                        static_cast<float>(foc.dq_meas.q),
+                                                                                                        static_cast<float>(foc.command_dq.d),
+                                                                                                        static_cast<float>(foc.command_dq.q)}});
+                        prev_millis = current_time_ms;
                     }
                 }
                 break;
@@ -608,9 +685,9 @@ namespace Maxwell {
             // sinusoidal_pid_controller.print_state();
 
             // Generate three sin waves, offset by 120 degrees
-            float U_a = _sin(theta)          * max_voltage/2;
-            float U_b = _sin(theta - 2*_PI_3) * max_voltage/2;
-            float U_c = _sin(theta + 2*_PI_3) * max_voltage/2;
+            float U_a = _sin(theta)          * limits.max_voltage/2;
+            float U_b = _sin(theta - 2*_PI_3) * limits.max_voltage/2;
+            float U_c = _sin(theta + 2*_PI_3) * limits.max_voltage/2;
 
             // if (i% 1000 == 0) Serial.println(U_b);
 
@@ -647,7 +724,7 @@ namespace Maxwell {
         uint32_t prev_millis = millis();
         while (true) {
             // Read pwm input and map as a voltage:
-            float U_q = pwm_input->read_percentage() / 100.0 * max_voltage;
+            float U_q = pwm_input->read_percentage() / 100.0 * limits.max_voltage;
             // U_q = -U_q;
 
             float theta = encoder->get_angle();
@@ -768,7 +845,7 @@ namespace Maxwell {
                                                 static_cast<float>(currents[1]),
                                                 static_cast<float>(currents[2])};
 
-                alpha_beta_struct ab_vec = clarke_transform(phase_currents);
+                ab_struct ab_vec = clarke_transform(phase_currents);
                 dq_struct dq_vec = park_transform(ab_vec, rotor_theta);
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {static_cast<float>(desired_angle),
                                                                                         static_cast<float>(rotor_theta)}});
@@ -803,7 +880,7 @@ namespace Maxwell {
                             0.1,
                             0.0,
                             0.0,
-                            max_current,
+                            limits.max_current,
                             1);
 
 
@@ -814,7 +891,7 @@ namespace Maxwell {
         while (true) {
             current_time_us = micros();
             current_time_ms = millis();
-            float I_q = pwm_input->read_percentage() / 100.0 * max_current;
+            float I_q = pwm_input->read_percentage() / 100.0 * limits.max_current;
             q_pid_controller.set_setpoint(I_q);
 
             encoder->update();
@@ -826,7 +903,7 @@ namespace Maxwell {
                 current_sensors->get_current_b(),
                 current_sensors->get_current_c()
             };
-            alpha_beta_struct ab_vec = clarke_transform(currents);
+            ab_struct ab_vec = clarke_transform(currents);
             dq_struct dq_meas = park_transform(ab_vec, theta);
 
             // Low pass filter the dq measurements
@@ -837,7 +914,7 @@ namespace Maxwell {
             dq_struct command_dq = {0, 0};
             command_dq.q = q_pid_controller.update(I_DC);
 
-            alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta);
+            ab_struct command_ab = reverse_park_transform(command_dq, theta);
             PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
             set_phase_voltages(command_voltages.current_a,
                                 command_voltages.current_b,
@@ -886,7 +963,7 @@ namespace Maxwell {
                             0.0,
                             0.0,
                             0.0,
-                            max_current,
+                            limits.max_current,
                             1);
 
         PIDController q_pid_controller =
@@ -894,7 +971,7 @@ namespace Maxwell {
                             0.0,
                             0.0,
                             0.0,
-                            max_current,
+                            limits.max_current,
                             3);
         PIDController position_pid_controller =
             PIDController(  20,
@@ -910,7 +987,6 @@ namespace Maxwell {
                             0.0,
                             20,
                             20);
-
 
         d_pid_controller.set_setpoint(0.0);
 
@@ -994,7 +1070,7 @@ namespace Maxwell {
                 current_sensors->get_current_b(),
                 current_sensors->get_current_c()
             };
-            alpha_beta_struct ab_vec = clarke_transform(currents);
+            ab_struct ab_vec = clarke_transform(currents);
             dq_struct dq_meas = park_transform(ab_vec, theta);
 
             // Low pass filter the dq measurements
@@ -1005,7 +1081,7 @@ namespace Maxwell {
             dq_struct command_dq = {0, I_q}; // Running in pure voltage mode - Not very energy efficient
             // command_dq.d = command_d_lpf.update(d_pid_controller.update(dq_meas.d), current_time_us);
             // command_dq.q = command_q_lpf.update(q_pid_controller.update(dq_meas.q), current_time_us);
-            alpha_beta_struct command_ab = reverse_park_transform(command_dq, theta);
+            ab_struct command_ab = reverse_park_transform(command_dq, theta);
             PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
             set_phase_voltages(command_voltages.current_a,
                                 command_voltages.current_b,
@@ -1045,237 +1121,7 @@ namespace Maxwell {
         }
     }
 
-    alpha_beta_struct Maxwell::clarke_transform(PhaseCurrents currents) { // currents to alpha-beta
-        // float I_alpha = currents.current_a;
-        // float I_beta = (currents.current_a  + 2*currents.current_b) / _SQRT3;
-
-        // Altenative Amplitude-invariant version
-        float I_alpha = currents.current_a;
-        float I_beta = (currents.current_b - currents.current_c) / _SQRT3;
-
-        alpha_beta_struct ab = {I_alpha, I_beta};
-        return ab;
-    }
-
-    dq_struct Maxwell::park_transform(alpha_beta_struct ab_vec, float theta) { // alpha-beta to dq
-        // the park transform
-        float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
-        float d = ab_vec.alpha * _cos(electrical_theta)  + ab_vec.beta * _sin(electrical_theta);
-        float q = -ab_vec.alpha * _sin(electrical_theta) + ab_vec.beta * _cos(electrical_theta);
-        dq_struct dq = {d, q};
-        return dq;
-    }
-
-    alpha_beta_struct Maxwell::reverse_park_transform(dq_struct dq_vec, float theta) {  // dq to alpha-beta
-        float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
-        double c = _cos(electrical_theta);
-        double s = _sin(electrical_theta);
-        float alpha = dq_vec.d * c - dq_vec.q * s;
-        float beta  = dq_vec.d * s + dq_vec.q * c;
-        alpha_beta_struct alpha_beta = {alpha, beta};
-        return alpha_beta;
-    }
-
-    PhaseCurrents Maxwell::reverse_clarke_transform(alpha_beta_struct ab_vec) {
-        // PhaseCurrents currents = {(2/3)*ab_vec.alpha,
-        //                     (-1/3)*ab_vec.alpha + (sqrt(3)/3)*ab_vec.beta,
-        //                     (-1/3)*ab_vec.alpha - (sqrt(3)/3)*ab_vec.beta};
-        PhaseCurrents currents;
-        currents.current_a = ab_vec.alpha;
-        currents.current_b = (-ab_vec.alpha + M_SQRT3*ab_vec.beta) / 2;
-        currents.current_c = (-ab_vec.alpha - M_SQRT3*ab_vec.beta) / 2;
-        return currents;
-    }
-
-    void Maxwell::drive_hall_velocity() { // velocity is in electrical rads/s, duration is in ms
-        uint8_t six_step_commutation_states_ccw[6][6] = {
-            {0, 0, 1, 0, 0, 1}, // 0 - B->C // 110
-            {1, 0, 0, 0, 0, 1}, // 1 - A->C // 100
-            {1, 0, 0, 1, 0, 0}, // 2 - A->B // 101
-            {0, 0, 0, 1, 1, 0}, // 3 - C->B // 001
-            {0, 1, 0, 0, 1, 0}, // 4 - C->A // 011
-            {0, 1, 1, 0, 0, 0}  // 5 - B->A // 010
-
-        };
-
-        // Running in 6x PWM mode
-        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
-
-        // Enable the driver
-        driver->enable(true);
-        digitalWrite(DRV8323_BRAKE_PIN, HIGH); // set the brake pin to high - disables brake.
-        digitalWrite(DRV8323_DIR_PIN, HIGH);    // set the direction pin to high
-
-        int dir = MOTOR_DIRECTION::CW;
-        // // ALIGN
-        // analogWrite(DRV8323_HI_A_PIN, 100);
-        // digitalWrite(DRV8323_LO_B_PIN, HIGH);
-        // digitalWrite(DRV8323_LO_C_PIN, HIGH);
-        // delay(100);
-
-        all_off();
 
 
 
-        int level = 0;
-        uint8_t step = 0;
-        uint32_t start = millis();
-        bool aligned = false;
-        int8_t old_rotor_sector = hall_sensor->rotor_sector;
-        current_sensors->calibrate_offsets();
-
-        while (true) {
-            if (pwm_input->read_percentage() > 5) {
-                uint32_t velocity = map(pwm_input->read_percentage(), 0, 100, 0, MAX_SPEED);
-                pid_controller->set_setpoint(static_cast<float>(velocity));
-
-
-
-                // if (not aligned) {
-                //     // ALIGN
-                //     analogWrite(DRV8323_HI_A_PIN, 100);
-                //     digitalWrite(DRV8323_LO_B_PIN, HIGH);
-                //     digitalWrite(DRV8323_LO_C_PIN, HIGH);
-                //     delay(100);
-                //     Serial.println("Aligned");
-                //     aligned = true;
-                // }
-
-                float speed = hall_sensor->electrical_velocity;
-                float output = pid_controller->update(speed);
-                level = constrain(output, 0, MAX_LEVEL);
-                // Match the state of the hall sensors to the commutation states
-                // rotor_sector goes from 0-5
-                step = dir == MOTOR_DIRECTION::CW ? (hall_sensor->rotor_sector + 3) % 6 : hall_sensor->rotor_sector;
-                analogWrite(DRV8323_HI_A_PIN, six_step_commutation_states_ccw[step][0] * level);
-                digitalWrite(DRV8323_LO_A_PIN, six_step_commutation_states_ccw[step][1]);
-                analogWrite(DRV8323_HI_B_PIN, six_step_commutation_states_ccw[step][2] * level);
-                digitalWrite(DRV8323_LO_B_PIN, six_step_commutation_states_ccw[step][3]);
-                analogWrite(DRV8323_HI_C_PIN, six_step_commutation_states_ccw[step][4] * level);
-                digitalWrite(DRV8323_LO_C_PIN, six_step_commutation_states_ccw[step][5]);
-
-                // if (hall_sensor->rotor_sector != old_rotor_sector) {
-                //     pid_controller->print_state();
-                // }
-                old_rotor_sector = hall_sensor->rotor_sector;
-            }
-            else {
-                aligned = false;
-                all_off();
-                pid_controller->set_setpoint(0);
-                // current_sensors->calibrate_offsets();
-            }
-        }
-
-        // STOP
-        digitalWrite(DRV8323_HI_A_PIN, 0);
-        digitalWrite(DRV8323_LO_A_PIN, 0);
-        digitalWrite(DRV8323_HI_B_PIN, 0);
-        digitalWrite(DRV8323_LO_B_PIN, 0);
-        digitalWrite(DRV8323_HI_C_PIN, 0);
-        digitalWrite(DRV8323_LO_C_PIN, 0);
-    }
-
-    void Maxwell::drive_velocity(int velocity, int duration) { // velocity is in ms, duration is in ms
-        // constrain velocity to 0-255
-        velocity = constrain(velocity, 0, 255);
-
-        uint8_t six_step_commutation_states[6][6] = {
-            //  AH,AL,BH,BL,CH,CL
-            {1, 0, 0, 0, 0, 1}, // 1 - B - A->C
-            {0, 0, 1, 0, 0, 1}, // 2 - A - B->C
-            {0, 1, 1, 0, 0, 0}, // 3 - C - B->A
-            {0, 1, 0, 0, 1, 0}, // 4 - B - C->A
-            {0, 0, 0, 1, 1, 0}, // 5 - A - C->B
-            {1, 0, 0, 1, 0, 0}  // 6 - C - A->B
-        };
-        // Running in 6x PWM mode
-        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_6x);
-
-        // Enable the driver
-        driver->enable(true);
-        digitalWrite(DRV8323_BRAKE_PIN, HIGH); // set the brake pin to high - disables brake.
-        digitalWrite(DRV8323_DIR_PIN, HIGH);    // set the direction pin to high
-
-        int level = 40;
-        int on_time = 15;
-        int off_time = 1;
-        int step = 0;
-        int high_impedance_phase = 0;
-
-        // double align
-        analogWrite(DRV8323_HI_A_PIN, 70);
-        analogWrite(DRV8323_LO_B_PIN, 70);
-        // vTaskDelay(100);
-
-        analogWrite(DRV8323_HI_A_PIN, 70);
-        analogWrite(DRV8323_LO_C_PIN, 70);
-        // vTaskDelay(100);
-
-        uint32_t start = millis();
-        int i = 0;
-        for (; millis() - start < duration/2;) {
-            on_time = constrain(on_time, 5, 100);
-            step = i % 6;
-            // high_impedance_phase = (step+2) % 3;
-            analogWrite(DRV8323_HI_A_PIN, six_step_commutation_states[step][0] * level);
-            analogWrite(DRV8323_LO_A_PIN, six_step_commutation_states[step][1] * level);
-            analogWrite(DRV8323_HI_B_PIN, six_step_commutation_states[step][2] * level);
-            analogWrite(DRV8323_LO_B_PIN, six_step_commutation_states[step][3] * level);
-            analogWrite(DRV8323_HI_C_PIN, six_step_commutation_states[step][4] * level);
-            analogWrite(DRV8323_LO_C_PIN, six_step_commutation_states[step][5] * level);
-            // vTaskDelay(on_time);
-
-            // analogWrite(DRV8323_HI_A_PIN, 0);
-            // analogWrite(DRV8323_HI_B_PIN, 0);
-            // analogWrite(DRV8323_HI_C_PIN, 0);
-            // analogWrite(DRV8323_LO_A_PIN, 0);
-            // analogWrite(DRV8323_LO_B_PIN, 0);
-            // analogWrite(DRV8323_LO_C_PIN, 0);
-            // vTaskDelay(off_time);
-            if (i % 6 == 0) {
-                on_time--;
-            }
-            i++;
-        }
-        // start = millis();
-        // for (; millis() - start < duration/2; ) {
-        //     // Serial.println(driver->get_fault_status_1_string());
-        //     // Serial.println(driver->get_fault_status_2_string());
-        //
-        //     step = i % 6;
-        //     high_impedance_phase = (step+1) % 3;
-        //     analogWrite(DRV8323_HI_A_PIN, six_step_commutation_states[step][0] * level);
-        //     analogWrite(DRV8323_LO_A_PIN, six_step_commutation_states[step][1] * level);
-        //     analogWrite(DRV8323_HI_B_PIN, six_step_commutation_states[step][2] * level);
-        //     analogWrite(DRV8323_LO_B_PIN, six_step_commutation_states[step][3] * level);
-        //     analogWrite(DRV8323_HI_C_PIN, six_step_commutation_states[step][4] * level);
-        //     analogWrite(DRV8323_LO_C_PIN, six_step_commutation_states[step][5] * level);
-        //     // vTaskDelay(on_time);
-        //
-        //     while (!trigger->zero_cross[high_impedance_phase]) {
-        //
-        //     }
-        //
-        //     // // vTaskDelay(on_time);
-        //     // analogWrite(DRV8323_HI_A_PIN, 0);
-        //     // analogWrite(DRV8323_HI_B_PIN, 0);
-        //     // analogWrite(DRV8323_HI_C_PIN, 0);
-        //     // vTaskDelay(off_time);
-        //     //
-        //     i++;
-        // }
-
-
-
-        analogWrite(DRV8323_HI_A_PIN, 0);
-        analogWrite(DRV8323_HI_B_PIN, 0);
-        analogWrite(DRV8323_HI_C_PIN, 0);
-        analogWrite(DRV8323_LO_A_PIN, 0);
-        analogWrite(DRV8323_LO_B_PIN, 0);
-        analogWrite(DRV8323_LO_C_PIN, 0);
-
-
-
-    }
 }

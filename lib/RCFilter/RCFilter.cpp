@@ -13,9 +13,15 @@ RCFilter::RCFilter(double cutoff_freq) {
     RC = 1 / (_2PI * cutoff_freq);
     prev_value = 0;
     prev_update_time_us = 0;
+    filter_enabled = true; // Enabled by default
 }
 
 double RCFilter::update(double input, unsigned long current_time_us) {
+    if (!filter_enabled) {
+        prev_value = input;
+        prev_update_time_us = current_time_us;
+        return input;
+    }
     double T = (current_time_us - prev_update_time_us) * 1e-6;
     prev_update_time_us = current_time_us;
 
