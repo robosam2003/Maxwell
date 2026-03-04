@@ -110,9 +110,11 @@ namespace Maxwell {
         load_control_config();
 
         t_config = config_manager.read_config(); // Try to read the config from flash
+        // sensor_offset_calibration();
 
         if (not t_config.configured) {
             sensor_offset_calibration();
+
         }
         else {
             encoder->set_offset(t_config.offset);
@@ -366,50 +368,62 @@ namespace Maxwell {
         encoder->update();
         float zero_angle = encoder->get_angle();
 
-        float theta = 0;
-        for (long i=0; i<50000; i++) {
-            theta += 0.0005;
-            // theta = fmod(theta, _2PI);
-            encoder->update();
-            if (i%1000==0) {
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta,encoder->get_angle() * config.pole_pairs}});
-            }
-            set_phase_voltages({limits.align_voltage, 0}, theta);
-        }
+        // float average_diff = 0;
+        // float theta = 0;
+        // for (long i=0; i<50000; i++) {
+        //     theta += 0.0005;
+        //     // theta = fmod(theta, _2PI);
+        //     encoder->update();
+        //     if (i%1000==0) {
+        //         telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta,encoder->get_angle()}});
+        //     }
+        //     average_diff = (average_diff * i + (encoder->get_angle()*config.pole_pairs - theta)) / (i+1);
+        //     set_phase_voltages({limits.align_voltage, 0}, theta);
+        // }
+        // encoder->update();
+        // float top_angle = encoder->get_angle();
+        // for (long i=0; i<50000; i++) {
+        //     theta -= 0.0005;
+        //     // theta = fmod(theta, _2PI);
+        //     encoder->update();
+        //     if (i%1000==0) {
+        //         telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta, encoder->get_angle()}});
+        //     }
+        //     average_diff = (average_diff * i + (encoder->get_angle()*config.pole_pairs - theta)) / (i+1);
+        //     set_phase_voltages({limits.align_voltage, 0}, theta);
+        // }
+        // float bottom_angle = encoder->get_angle();
+        // // Offset is the bottom angle (we should now be at zero electrical angle)
+        // float off = average_diff;
+        // encoder->set_offset(off);
+        set_phase_voltages({limits.align_voltage, 0}, 0);
+        delay(700);
         encoder->update();
-        float top_angle = encoder->get_angle();
-        for (long i=0; i<50000; i++) {
-            theta -= 0.0005;
-            // theta = fmod(theta, _2PI);
-            encoder->update();
-            if (i%1000==0) {
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta, encoder->get_angle() * config.pole_pairs}});
-            }
-            set_phase_voltages({limits.align_voltage, 0}, theta);
-        }
-        float bottom_angle = encoder->get_angle();
-        // Offset is the bottom angle (we should now be at zero electrical angle)
-        float off = bottom_angle - theta;
+        float off = encoder->get_angle();
         encoder->set_offset(off);
+        telemetry->send({GENERAL, {off}});
+
+        set_phase_voltages(0, 0, 0);
+
+        // write to config
 
         t_config.configured = true;
         t_config.magic_number = 0xDEADBEEF;
         t_config.offset = off;
         config_manager.write_config(t_config);
 
-
-        // Calculate CW or CCW encoder configuration
-        float diff = top_angle - zero_angle;
-
-        if (diff > 0) {
-            encoder->_direction = SENSOR_DIRECTION::CW;
-        }
-        else if (diff < 0) {
-            encoder->_direction = SENSOR_DIRECTION::CCW;
-        }
-        else {
-            Serial.println("DID NOT DETECT MOVEMENT");
-        }
+        // // Calculate CW or CCW encoder configuration
+        // float diff = top_angle - zero_angle;
+        //
+        // if (diff > 0) {
+        //     encoder->_direction = SENSOR_DIRECTION::CW;
+        // }
+        // else if (diff < 0) {
+        //     encoder->_direction = SENSOR_DIRECTION::CCW;
+        // }
+        // else {
+        //     Serial.println("DID NOT DETECT MOVEMENT");
+        // }
         // Current sensor calibration:
         // set_phase_voltages(-0.75, 0, 0.75);
         // for (int i=0; i<10; i++) {
@@ -433,14 +447,8 @@ namespace Maxwell {
         //     delay(10);
         // }
 
-        // set_phase_voltages({limits.align_voltage, 0}, 0);
-        // delay(700);
-        // encoder->update();
-        // encoder->set_offset(encoder->get_angle());
-        // telemetry->send({GENERAL, {zero_angle, top_angle, bottom_angle,
-        //                                                 static_cast<float>(encoder->_direction),
-        //                                                 static_cast<float>(encoder->offset)}});
-        // set_phase_voltages(0, 0, 0);
+
+
 
         // // wait until current it low
         // double current_a = current_sensors->get_current_a();
@@ -563,16 +571,18 @@ namespace Maxwell {
         // Setup components for bldc_control
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
+
+        // Must not be pointers!
         PIDController d_pid =
-                    PIDController(  2.0,
-                                    0.0,
+                    PIDController(  1.0,
+                                    2.0,
                                     0.0,
                                     0.0,
                                     limits.max_current,
                                     1);
         PIDController q_pid =
-            PIDController(  2.0,
-                            0.0,
+            PIDController(  1.0,
+                            2.0,
                             0.0,
                             0.0,
                             limits.max_current,
@@ -600,6 +610,18 @@ namespace Maxwell {
                             // TORQUE CONTROL, with TORQUE CONTROL MODE
                             float U_q = reference * limits.max_voltage;
                             set_phase_voltages({0, U_q});
+
+                            // // Measure current and transform
+                            foc.phase_current_meas = {current_sensors->get_current_a(),
+                                                        current_sensors->get_current_b(),
+                                                        current_sensors->get_current_c()};
+                            foc.ab_meas = clarke_transform(foc.phase_current_meas);
+                            foc.dq_meas = park_transform(foc.ab_meas, angle);
+
+                            // Filter measured currents
+                            foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
+                            foc.dq_meas.q = foc.q_lpf->update(foc.dq_meas.q, current_time_us);
+
                             break;
                         }
 
@@ -642,7 +664,8 @@ namespace Maxwell {
                         telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
                                                                                                         static_cast<float>(foc.dq_meas.q),
                                                                                                         static_cast<float>(foc.command_dq.d),
-                                                                                                        static_cast<float>(foc.command_dq.q)}});
+                                                                                                        static_cast<float>(foc.command_dq.q),
+                                                                                                            reference}});
                         prev_millis = current_time_ms;
                     }
                 }

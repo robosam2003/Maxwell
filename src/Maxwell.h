@@ -36,15 +36,15 @@ namespace Maxwell {
             MOTOR_TYPE::BLDC,
             CONTROL_MODE::TORQUE,
             SENSOR_TYPE::MAGNETIC,
-            TORQUE_CONTROL_MODE::CURRENT,
+            TORQUE_CONTROL_MODE::VOLTAGE,
             POLE_PAIRS_6374,
             0.0,
             {2.0, 0, 0, limits.max_current, 1},
             {2.0, 0, 0, limits.max_current, 3},
             {0.05, 1.0, 0, 20, 20},
             {20, 0, 0, limits.max_velocity, limits.max_velocity},
-            {true, 0.5},
-            {true, 0.5},
+            {true, 10},
+            {true, 10},
             {true, 2.0},
             {true, 2.0}
             };
@@ -68,9 +68,9 @@ namespace Maxwell {
 
         FOC foc;
         limits_struct limits = { // Absorb into config struct?
-            .max_voltage = 10.0,
-            .max_current = 5.0,
-            .align_voltage = 1.5,
+            .max_voltage = 5.0,
+            .max_current = 3.0,
+            .align_voltage = 2.5,
             .max_velocity = 250.0 // in electrical radians per second
         };
         pwm_3x_struct* pwm_3x;

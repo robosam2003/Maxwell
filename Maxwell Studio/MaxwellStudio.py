@@ -73,6 +73,8 @@ class Frame:
     def append(self, timestamp: float, data: List[float]):
         """Append data to circular buffers - much faster than deque"""
         self.sample_buffer[self.index] = timestamp
+        # If there's a data size mismatch, restart the buffers to avoid index errors
+
         for i, value in enumerate(data):
             self.data_buffers[i][self.index] = value
         self.index = (self.index + 1) % BUFFER_SIZE
@@ -234,12 +236,16 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
     def handle_packet(self, name: str, data_list: list):
         if name == "GENERAL":
             self.outputLabel.setText(f"GENERAL: {data_list}")
+            return
         # Called in the main (GUI) thread via signal
         data = [float(x) for x in data_list]
         timestamp = time.time() - self.start_time
 
         for frame in self.frames:
             if frame.name == name:
+                if len(data) != len(frame.data_buffers):
+                    print(f"Data size mismatch for frame {name}: expected {len(frame.data_buffers)}, got {len(data)}. Resetting frame.")
+                    frame.__init__(name, len(data))  # Reinitialize the frame with correct size
                 frame.append(timestamp, data)
                 break
         else:
