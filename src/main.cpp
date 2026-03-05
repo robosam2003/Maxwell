@@ -15,7 +15,7 @@ void setup() {
     maxwell.setup();
     // maxwell.init_pwm_3x();
     // maxwell.set_phase_voltages(0, 0, 0);
-    // maxwell.current_sensors->calibrate_offsets();
+    maxwell.current_sensors->calibrate_offsets();
     // maxwell.driver->clear_fault();
     //
 }

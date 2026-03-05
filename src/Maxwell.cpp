@@ -110,15 +110,15 @@ namespace Maxwell {
         load_control_config();
 
         t_config = config_manager.read_config(); // Try to read the config from flash
-        // sensor_offset_calibration();
+        sensor_offset_calibration();
 
-        if (not t_config.configured) {
-            sensor_offset_calibration();
-
-        }
-        else {
-            encoder->set_offset(t_config.offset);
-        }
+        // if (not t_config.configured) {
+        //     sensor_offset_calibration();
+        //
+        // }
+        // else {
+        //     encoder->set_offset(t_config.offset);
+        // }
 
         telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {t_config.offset}});
 
@@ -163,20 +163,20 @@ namespace Maxwell {
 
         pwm_3x->TIM_A->setMode(pwm_3x->channel_a, PWM_MODE, pin_a);
         pwm_3x->TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 0;
         pwm_3x->TIM_A->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_A->setCaptureCompare(pwm_3x->channel_a, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
         // pwm_3x->TIM_A->attachInterrupt(Update_A_callback);
 
         pwm_3x->TIM_B->setMode(pwm_3x->channel_b, PWM_MODE, pin_b);
         pwm_3x->TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_B->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_B->getHandle()->Init.RepetitionCounter = 0;
         pwm_3x->TIM_B->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_B->setCaptureCompare(pwm_3x->channel_b, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
 
         pwm_3x->TIM_C->setMode(pwm_3x->channel_c, PWM_MODE, pin_c);
         pwm_3x->TIM_C->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_C->getHandle()->Init.RepetitionCounter = 1;
+        pwm_3x->TIM_C->getHandle()->Init.RepetitionCounter = 0;
         pwm_3x->TIM_C->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_C->setCaptureCompare(pwm_3x->channel_c, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
 
@@ -196,7 +196,7 @@ namespace Maxwell {
         //     LL_TIM_SetSlaveMode(timer->getHandle()->Instance, LL_TIM_SLAVEMODE_TRIGGER);
         // }
 
-        // LL_TIM_SetTriggerOutput(pwm_3x->TIM_B->getHandle()->Instance, LL_TIM_TRGO_UPDATE);
+        LL_TIM_SetTriggerOutput(pwm_3x->TIM_A->getHandle()->Instance, LL_TIM_TRGO_UPDATE);
 
         sync_pwm();
     }
@@ -572,21 +572,28 @@ namespace Maxwell {
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
+
+
+        float kp = 3.0;
+        float ki = 30;
+
+
+
         // Must not be pointers!
         PIDController d_pid =
-                    PIDController(  1.0,
-                                    2.0,
+                    PIDController(  kp,
+                                    ki,
                                     0.0,
                                     0.0,
-                                    limits.max_current,
-                                    1);
+                                    limits.max_voltage,
+                                    limits.max_voltage);
         PIDController q_pid =
-            PIDController(  1.0,
-                            2.0,
+            PIDController(  kp,
+                            ki,
                             0.0,
                             0.0,
-                            limits.max_current,
-                            3);
+                            limits.max_voltage,
+                            limits.max_voltage);
 
 
 
@@ -597,12 +604,14 @@ namespace Maxwell {
             case (CONTROL_MODE::TORQUE): {
                 while (true) {
                     // Read torque command from command source and convert to voltage command
+                    uint32_t current_time_ms = millis();
+                    uint32_t current_time_us = micros();
                     float reference = command_source->read();
+                    reference = foc.input_lpf->update(reference, current_time_us);
                     encoder->update();
                     float angle = encoder->get_angle();
                     float velocity = encoder->get_velocity();
-                    uint32_t current_time_ms = millis();
-                    uint32_t current_time_us = micros();
+
 
 
                     switch (config.torque_control_mode) {
@@ -610,6 +619,7 @@ namespace Maxwell {
                             // TORQUE CONTROL, with TORQUE CONTROL MODE
                             float U_q = reference * limits.max_voltage;
                             set_phase_voltages({0, U_q});
+                            current_sensors->read();
 
                             // // Measure current and transform
                             foc.phase_current_meas = {current_sensors->get_current_a(),
@@ -632,6 +642,7 @@ namespace Maxwell {
                             d_pid.set_setpoint(0.0);
                             q_pid.set_setpoint(I_q);
 
+                            current_sensors->read();
                             // // Measure current and transform
                             foc.phase_current_meas = {current_sensors->get_current_a(),
                                                         current_sensors->get_current_b(),
@@ -653,7 +664,8 @@ namespace Maxwell {
                         }
                         default: break;
                     }
-
+                    uint32_t end_time_us = micros();
+                    float loop_frequency = 1/((end_time_us - current_time_us)/1000000.0);
                     if (current_time_ms - prev_millis >= 30) {
                         telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                         telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {angle}});
@@ -663,9 +675,9 @@ namespace Maxwell {
                                                                                         static_cast<float>(foc.phase_current_meas.current_c)}});
                         telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
                                                                                                         static_cast<float>(foc.dq_meas.q),
-                                                                                                        static_cast<float>(foc.command_dq.d),
-                                                                                                        static_cast<float>(foc.command_dq.q),
-                                                                                                            reference}});
+                                                                                                            0.0,
+                                                                                                            reference*limits.max_current}});
+                        telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {loop_frequency}});
                         prev_millis = current_time_ms;
                     }
                 }

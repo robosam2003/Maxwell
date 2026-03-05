@@ -1,0 +1,282 @@
+//
+// Created by robosam on 2/3/25.
+//
+
+#include "current_sensors.h"
+
+CurrentSensors::CurrentSensors(uint32_t pin_a, uint32_t pin_b, uint32_t pin_c, int gain) {
+    _pin_a = pin_a;
+    _pin_b = pin_b;
+    _pin_c = pin_c;
+    // _conversion_factor = conversion_factor;
+    _current_a = 0.0;
+    _current_b = 0.0;
+    _current_c = 0.0;
+    _offset_a = 0.0;
+    _offset_b = 0.0;
+    _offset_c = 0.0;
+
+    double cuttoff_freq = 40;
+    _filter_a = new RCFilter(cuttoff_freq);
+    _filter_b = new RCFilter(cuttoff_freq);
+    _filter_c = new RCFilter(cuttoff_freq);
+
+    _csa_gain = gain;
+    hadc1 = new ADC_HandleTypeDef();
+    hadc2 = new ADC_HandleTypeDef();
+    hadc3 = new ADC_HandleTypeDef();
+
+    // analogReadResolution(12);
+
+
+    setup_injected_adc();
+}
+
+void CurrentSensors::setup_injected_adc() {
+    // Enable clocks
+    __HAL_RCC_ADC1_CLK_ENABLE();
+    __HAL_RCC_ADC2_CLK_ENABLE();
+    __HAL_RCC_ADC3_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+
+    pinMode(_pin_a, INPUT_ANALOG); // PA2 - ADC3_IN2
+    pinMode(_pin_b, INPUT_ANALOG); // PA1 - ADC2_IN1
+    pinMode(_pin_c, INPUT_ANALOG); // PA0 - ADC1_IN0
+
+    // ADC1 - For Phase C
+    hadc1->Instance = ADC1;
+    hadc1->Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV6;
+    hadc1->Init.Resolution = ADC_RESOLUTION_12B;
+    hadc1->Init.ScanConvMode = ENABLE;
+    hadc1->Init.ContinuousConvMode = ENABLE; // For injected mode
+    hadc1->Init.DiscontinuousConvMode = DISABLE;
+    hadc1->Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE; //
+    hadc1->Init.ExternalTrigConv = ADC_SOFTWARE_START; // for now
+    hadc1->Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    hadc1->Init.NbrOfConversion = 3;
+    hadc1->Init.DMAContinuousRequests = DISABLE;
+    hadc1->Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+
+    uint32_t adc_code = HAL_ADC_Init(hadc1);
+    if (adc_code != HAL_OK) {
+      for (int i=0; i<10; i++) {
+        Serial.println("ADC Initialization Error");
+        Serial.println(adc_code);
+        delay(1000);
+      }
+    }
+
+    // ADC2 - For Phase B
+    hadc2->Instance = ADC2;
+    hadc2->Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV6;
+    hadc2->Init.Resolution = ADC_RESOLUTION_12B;
+    hadc2->Init.ScanConvMode = ENABLE;
+    hadc2->Init.ContinuousConvMode = ENABLE; // For injected mode
+    hadc2->Init.DiscontinuousConvMode = DISABLE;
+    hadc2->Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE; //
+    hadc2->Init.ExternalTrigConv = ADC_SOFTWARE_START; // for now
+    hadc2->Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    hadc2->Init.NbrOfConversion = 3;
+    hadc2->Init.DMAContinuousRequests = DISABLE;
+    hadc2->Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+
+    adc_code = HAL_ADC_Init(hadc1);
+    if (adc_code != HAL_OK) {
+      for (int i=0; i<10; i++) {
+        Serial.println("ADC Initialization Error");
+        Serial.println(adc_code);
+        delay(1000);
+      }
+    }
+
+    // ADC3 - For Phase A
+    hadc3->Instance = ADC3;
+    hadc3->Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV6;
+    hadc3->Init.Resolution = ADC_RESOLUTION_12B;
+    hadc3->Init.ScanConvMode = ENABLE;
+    hadc3->Init.ContinuousConvMode = ENABLE; // For injected mode
+    hadc3->Init.DiscontinuousConvMode = DISABLE;
+    hadc3->Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE; //
+    hadc3->Init.ExternalTrigConv = ADC_SOFTWARE_START; // for now
+    hadc3->Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    hadc3->Init.NbrOfConversion = 3;
+    hadc3->Init.DMAContinuousRequests = DISABLE;
+    hadc3->Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+
+    adc_code = HAL_ADC_Init(hadc1);
+    if (adc_code != HAL_OK) {
+      for (int i=0; i<10; i++) {
+        Serial.println("ADC Initialization Error");
+        Serial.println(adc_code);
+        delay(1000);
+      }
+    }
+
+    ADC_InjectionConfTypeDef sConfigInjected;
+    sConfigInjected.InjectedNbrOfConversion = 3;
+    sConfigInjected.InjectedSamplingTime = ADC_SAMPLETIME_3CYCLES;
+    sConfigInjected.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONVEDGE_RISING;
+    sConfigInjected.AutoInjectedConv = DISABLE;
+    sConfigInjected.ExternalTrigInjecConv = ADC_EXTERNALTRIGINJECCONV_T1_TRGO;
+    sConfigInjected.InjectedDiscontinuousConvMode = DISABLE;
+    sConfigInjected.InjectedOffset = 0;
+
+
+    // PA2 - ADC3_IN2
+    // PA1 - ADC2_IN1
+    // PA0 - ADC1_IN0
+    // first channel
+    sConfigInjected.InjectedRank = ADC_INJECTED_RANK_1;
+    sConfigInjected.InjectedChannel = ADC_CHANNEL_8; // PB_0 - ADC1_IN1
+    if (HAL_ADCEx_InjectedConfigChannel(hadc1, &sConfigInjected) != HAL_OK){
+        Serial.println("Error configuring ADC channel 1");
+    }
+    // second channel
+    sConfigInjected.InjectedRank = ADC_INJECTED_RANK_2;
+    sConfigInjected.InjectedChannel = ADC_CHANNEL_15; // PC_5 - ADC1_IN15
+    if (HAL_ADCEx_InjectedConfigChannel(hadc1, &sConfigInjected) != HAL_OK){
+        Serial.println("Error configuring ADC channel 2");
+    }
+    // third channel
+    sConfigInjected.InjectedRank = ADC_INJECTED_RANK_3;
+    sConfigInjected.InjectedChannel = ADC_CHANNEL_14; // PC_4 - ADC1_IN14
+    if (HAL_ADCEx_InjectedConfigChannel(hadc1, &sConfigInjected) != HAL_OK){
+        Serial.println("Error configuring ADC channel 3");
+    }
+
+    // Start the injected conversion
+    int start_code = HAL_ADCEx_InjectedStart(hadc1);
+    if (start_code != HAL_OK) {
+      for (int i=0; i<10; i++) {
+        Serial.println("Error starting injected conversion");
+        Serial.println(start_code);
+        delay(1000);
+      }
+
+    }
+    Serial.println("SUCCESSFULLY SETUP INJECTED ADC");
+}
+
+void CurrentSensors::set_csa_gain(int gain) {
+  _csa_gain = gain;
+}
+
+void CurrentSensors::calibrate_offsets() {
+  uint32_t num_samples = 100;
+  double sum_a = 0;
+  double sum_b = 0;
+  double sum_c = 0;
+  _offset_a = 0.0;
+  _offset_b = 0.0;
+  _offset_c = 0.0;
+  _filter_a->prev_value = 0.0;
+  _filter_b->prev_value = 0.0;
+  _filter_c->prev_value = 0.0;
+  bool old_filtered = filtered;
+  filtered = false; // Ensure no filtering for this bit
+
+  for (int i = 0; i< num_samples; i++) {
+    // read();
+    // Let the value settle
+    get_current_a();
+    get_current_b();
+    get_current_c();
+    delay(1);
+  }
+  for (int i = 0; i < num_samples; i++) {
+    // read();
+    sum_a += get_current_a();
+    sum_b += get_current_b();
+    sum_c += get_current_c();
+    delay(1);
+  }
+  _offset_a = sum_a / num_samples;
+  _offset_b = sum_b / num_samples;
+  _offset_c = sum_c / num_samples;
+  filtered = old_filtered;
+  }
+
+void CurrentSensors::read() {
+  // HAL_ADCEx_InjectedPollForConversion(hadc1, 100);
+  // v_a = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_1) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // v_b = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_2) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // v_c = HAL_ADCEx_InjectedGetValue(hadc1, ADC_INJECTED_RANK_3) * CURRENT_SENSE_CONVERSION_FACTOR;
+  // uint32_t current_time_us = micros();
+  // // _current_a = v_a;
+  // // _current_b = v_b;
+  // // _current_c = v_c;
+  // float a_calc = (3.3/2 - v_a) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_a : -_offset_a);
+  // float b_calc = (3.3/2 - v_b) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_b : -_offset_b);
+  // float c_calc = (3.3/2 - v_c) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_c : -_offset_c);
+  //
+  // // Invert things
+  // (inverted) ? (a_calc *= -1, b_calc *= -1, c_calc *= -1) : 0;
+  //
+  // if (filtered) {
+  //   _current_a = (abs(a_calc) < ANOMALY_THRESHOLD) ? _filter_a->update(a_calc, current_time_us): _current_a;
+  //   _current_b = (abs(b_calc) < ANOMALY_THRESHOLD) ? _filter_b->update(b_calc, current_time_us): _current_b;
+  //   // _current_c = 0.0 - _current_a - _current_b; // c_calc is not used in the filtered case, because it is redundant
+  //   _current_c = (abs(c_calc) < ANOMALY_THRESHOLD) ? _filter_c->update(c_calc, current_time_us): _current_c;
+  // }
+  // else {
+  //   _current_a = (abs(a_calc) < ANOMALY_THRESHOLD) ? a_calc : _current_a;
+  //   _current_b = (abs(b_calc) < ANOMALY_THRESHOLD) ? b_calc : _current_b;
+  //   // _current_c = 0.0 - _current_a - _current_b; // c_calc is not used in the non-filtered case, because it is redundant
+  //   _current_c = (abs(c_calc) < ANOMALY_THRESHOLD) ? c_calc : _current_c;
+  // }
+  return;
+}
+
+
+double CurrentSensors::get_current_a() {
+  v_a = analogRead(_pin_a) * CURRENT_SENSE_CONVERSION_FACTOR;
+  float calc_a = (3.3/2 - v_a) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_a : -_offset_a);
+  (inverted) ? (calc_a *= -1) : 0;
+
+  if (filtered) {
+    _current_a = (abs(calc_a) < ANOMALY_THRESHOLD) ? _filter_a->update(calc_a, micros()): _current_a;
+  }
+  else {
+    _current_a = (abs(calc_a) < ANOMALY_THRESHOLD) ? calc_a : _current_a;
+  }
+  return _current_a;
+}
+
+double CurrentSensors::get_current_b() {
+  v_b = analogRead(_pin_b) * CURRENT_SENSE_CONVERSION_FACTOR;
+  float calc_b = (3.3/2 - v_b) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_b : -_offset_b);
+  (inverted) ? (calc_b *= -1) : 0;
+
+  if (filtered) {
+    _current_b = (abs(calc_b) < ANOMALY_THRESHOLD) ? _filter_b->update(calc_b, micros()): _current_b;
+  }
+  else {
+    _current_b = (abs(calc_b) < ANOMALY_THRESHOLD) ? calc_b : _current_b;
+  }
+  return _current_b;
+}
+
+double CurrentSensors::get_current_c() {
+  v_c = analogRead(_pin_c) * CURRENT_SENSE_CONVERSION_FACTOR;
+  float calc_c = (3.3/2 - v_c) / (_csa_gain * R_SENSE) + ((inverted) ? _offset_c : -_offset_c);
+  (inverted) ? (calc_c *= -1) : 0;
+
+  if (filtered) {
+    _current_c = (abs(calc_c) < ANOMALY_THRESHOLD) ? _filter_c->update(calc_c, micros()): _current_c;
+  }
+  else {
+    _current_c = (abs(calc_c) < ANOMALY_THRESHOLD) ? calc_c : _current_c;
+  }
+  return _current_c;
+}
+
+double* CurrentSensors::get_currents() {
+  double currents[3] = {_current_a, _current_b, _current_c};
+  return currents;
+}
+
+double CurrentSensors::get_total_current() {
+  return _current_a + _current_b + _current_c;
+}

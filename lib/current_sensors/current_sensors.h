@@ -27,6 +27,8 @@ private:
     RCFilter* _filter_c;
     int _csa_gain;
 	ADC_HandleTypeDef* hadc1;
+	ADC_HandleTypeDef* hadc2;
+	ADC_HandleTypeDef* hadc3;
 
 
 public:
@@ -36,7 +38,7 @@ public:
     double _current_a;
     double _current_b;
     double _current_c;
-	bool filtered = true;
+	bool filtered = false; // ENSURE THIS IS OFF FOR STABLE D AND Q CONTROL!
 	bool inverted = true;
 
     explicit CurrentSensors(uint32_t pin_a,
