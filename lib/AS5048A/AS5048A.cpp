@@ -52,6 +52,8 @@ AS5048A::AS5048A(byte CS, SPIClass& spi, uint32_t spiFreq) {
     pinMode(_CS, OUTPUT);
     digitalWrite(_CS, HIGH);
 
+
+    // Timer
     timer = new HardwareTimer(TIM3);
     timer->setMode(1, TIMER_OUTPUT_DISABLED);
     timer->setOverflow(84000000, HERTZ_FORMAT); // 84 MHz clock
@@ -65,6 +67,13 @@ AS5048A::AS5048A(byte CS, SPIClass& spi, uint32_t spiFreq) {
 void AS5048A::update() {
     prev_absolute_angle = absolute_angle; // Store the angle from previous update
     uint32_t current_time = micros();
+    // int current_time_counts = static_cast<int>(timer->getCount()); // in microseconds
+    // if (current_time_counts < prev_time_counts) {
+    //     // Timer overflowed - adjust previous time accordingly
+    //     prev_time_counts -= 0xFFFF;
+    // }
+    // double Ts = (current_time_counts - prev_time_counts) * 11.9e-9; // Convert to seconds
+
 
     uint16_t angle = read_reg(REGISTER::ANGLE);
     float angle_raw_val = (static_cast<float>(angle) / 16384.0f) * _2PI; // Convert to radians
@@ -74,10 +83,33 @@ void AS5048A::update() {
     }
     prev_raw_angle = angle_raw_val;
     absolute_angle = (static_cast<float>(full_rotations) * _2PI) + prev_raw_angle;
+    if (_direction == CCW) {
+        absolute_angle = -absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
+    }
+    else {
+        absolute_angle = absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
+    }
+
+
+    // Calculate velocity here
+    const float Ts = (current_time - prev_micros) * 1e-6;
+    if (Ts > 100e-6) { // 100 microseconds - avoid calculating velocity if updates are too close together, which can cause noise
+        velocity = (absolute_angle - prev_absolute_angle) / Ts;
+        if (_direction == CCW) {
+            velocity = -velocity;
+        }
+        // prev_time_counts = current_time_counts;
+        prev_micros = current_time;
+    }
+    // else {
+    //     velocity = velocity; // Return previous velocity if updates are too close together
+    // }
+
     // (pos_filtered) ? absolute_angle = pos_lpf->update(absolute_angle, current_time) : 0;
 }
 
 float AS5048A::get_angle() {
+    return absolute_angle;
     // update();
     if (_direction == CCW) {
         return -absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
@@ -86,21 +118,25 @@ float AS5048A::get_angle() {
 }
 
 float AS5048A::get_velocity() {
-    int current_time_counts = static_cast<int>(timer->getCount()); // in microseconds
-    if (current_time_counts < prev_time_counts) {
-        // Timer overflowed - adjust previous time accordingly
-        prev_time_counts -= 0xFFFF;
-    }
-    // 84 MHz timer -> 11.9 ns per count
-    float Ts = (current_time_counts - prev_time_counts) * 11.9e-9; // Convert to seconds
-    if (Ts < 100e-6) { // 1 microseconds
-        return velocity;
-    }
-    velocity = (absolute_angle - prev_absolute_angle) / Ts;
-    if (_direction == CCW) {
-        velocity = -velocity; // Adjust for direction
-    }
-    prev_time_counts = current_time_counts;
+    // // int current_time_counts = static_cast<int>(timer->getCount()); // in microseconds
+    // // if (current_time_counts < prev_time_counts) {
+    // //     // Timer overflowed - adjust previous time accordingly
+    // //     prev_time_counts -= 0xFFFF;
+    // // }
+    // // 84 MHz timer -> 11.9 ns per count
+    // uint32_t current_time = micros();
+    //
+    // // float Ts = (current_time_counts - prev_time_counts) * 11.9e-9; // Convert to seconds
+    // const float Ts = (current_time - prev_micros) * 1e-6; // Convert to seconds
+    // // if (Ts < 1e-6) { // 1 microseconds
+    // //     return velocity;
+    // // }
+    // velocity = (absolute_angle - prev_absolute_angle) / Ts;
+    // if (_direction == CCW) {
+    //     velocity = -velocity; // Adjust for direction
+    // }
+    // // prev_time_counts = current_time_counts;
+    // // prev_micros = current_time;
     return velocity;
 }
 

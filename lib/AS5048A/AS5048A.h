@@ -31,6 +31,7 @@ private:
     };
 
     int prev_time_counts = 0; // Timestamp of the previous angle reading
+    uint32_t prev_micros = 0; // Timestamp of the previous angle reading in microseconds
     HardwareTimer* timer;
     uint16_t read_reg(REGISTER regAddress);
     void write_reg(REGISTER regAddress, uint16_t data);

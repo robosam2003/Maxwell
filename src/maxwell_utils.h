@@ -59,6 +59,7 @@ struct limits_struct {
     float max_current;
     float align_voltage;
     float max_velocity; // in electrical radians per second
+    float max_position; // in radians
 };
 
 struct params_struct {

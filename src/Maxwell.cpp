@@ -574,123 +574,151 @@ namespace Maxwell {
 
 
 
-        float kp = 3.0;
-        float ki = 30;
+        float dq_kp = 5.0;
+        float dq_ki = 1000.0;
 
 
 
         // Must not be pointers!
         PIDController d_pid =
-                    PIDController(  kp,
-                                    ki,
+                    PIDController(  dq_kp,
+                                    dq_ki,
                                     0.0,
                                     0.0,
                                     limits.max_voltage,
-                                    limits.max_voltage);
+                                    limits.max_voltage/10);
         PIDController q_pid =
-            PIDController(  kp,
-                            ki,
+            PIDController(  dq_kp,
+                            dq_ki,
                             0.0,
                             0.0,
                             limits.max_voltage,
-                            limits.max_voltage);
+                            limits.max_voltage/10);
 
+        PIDController velocity_pid =
+            PIDController(  0.01,
+                            2.0,
+                            0.0,
+                            0.0,
+                            limits.max_current,
+                            limits.max_current);
+        PIDController position_pid =
+            PIDController(  20,
+                            0.1,
+                            0.0,
+                            0.0,
+                            limits.max_velocity,
+                            limits.max_velocity);
 
-
-
+        float pos_ref = 0.0;
+        float vel_ref = 0.0;
+        float torque_reference = 0.0;
         uint32_t prev_millis = millis();
-        switch (config.control_mode) {
-            // Torque control mode: i.e. The reference command is a torque.
-            case (CONTROL_MODE::TORQUE): {
-                while (true) {
-                    // Read torque command from command source and convert to voltage command
-                    uint32_t current_time_ms = millis();
-                    uint32_t current_time_us = micros();
-                    float reference = command_source->read();
-                    reference = foc.input_lpf->update(reference, current_time_us);
-                    encoder->update();
-                    float angle = encoder->get_angle();
-                    float velocity = encoder->get_velocity();
+        while (true) { // Master control loop
+            // For all control cases, the following things are read/measured at the start of the loop:
+            uint32_t current_time_ms = millis();
+            uint32_t current_time_us = micros();
+            float reference = command_source->read();             // Read command from command source
+            reference = foc.input_lpf->update(reference, current_time_us);  // Filter command
 
+            // Update encoder and get angle and velocity
+            encoder->update();
+            float angle = encoder->get_angle();
+            float velocity = encoder->get_velocity();
+            velocity = foc.velocity_lpf->update(velocity, current_time_us);
 
+            // switch control mode to generate correct torque reference for the torque control loop
+            switch (config.control_mode) {
+                case (CONTROL_MODE::TORQUE): {
+                    // Direct torque control - reference is directly obtained from command source
+                    torque_reference = reference *
+                        ((config.torque_control_mode== TORQUE_CONTROL_MODE::VOLTAGE) ?
+                            limits.max_voltage : limits.max_current);
+                    break;
+                };
+                case (CONTROL_MODE::VELOCITY): {
+                    vel_ref = reference * limits.max_velocity;
+                    velocity_pid.set_setpoint(vel_ref);
+                    torque_reference = velocity_pid.update(velocity);
+                    break;
+                };
+                case (CONTROL_MODE::POSITION) : {
+                    pos_ref = reference * limits.max_position;
+                    position_pid.set_setpoint(pos_ref);
+                    vel_ref = position_pid.update(angle);
+                    velocity_pid.set_setpoint(vel_ref);
+                    torque_reference = velocity_pid.update(velocity);
+                    break;
+                };
+                default: break;
+            }
 
-                    switch (config.torque_control_mode) {
-                        case (TORQUE_CONTROL_MODE::VOLTAGE): {
-                            // TORQUE CONTROL, with TORQUE CONTROL MODE
-                            float U_q = reference * limits.max_voltage;
-                            set_phase_voltages({0, U_q});
-                            current_sensors->read();
+            // All control modes use torque control
+            switch (config.torque_control_mode) {
+                case (TORQUE_CONTROL_MODE::VOLTAGE): {
+                    // TORQUE CONTROL, with TORQUE CONTROL MODE
+                    float U_q = torque_reference;
+                    set_phase_voltages({0, U_q});
+                    current_sensors->read();
 
-                            // // Measure current and transform
-                            foc.phase_current_meas = {current_sensors->get_current_a(),
-                                                        current_sensors->get_current_b(),
-                                                        current_sensors->get_current_c()};
-                            foc.ab_meas = clarke_transform(foc.phase_current_meas);
-                            foc.dq_meas = park_transform(foc.ab_meas, angle);
+                    // // Measure current and transform
+                    foc.phase_current_meas = {current_sensors->get_current_a(),
+                                                current_sensors->get_current_b(),
+                                                current_sensors->get_current_c()};
+                    foc.ab_meas = clarke_transform(foc.phase_current_meas);
+                    foc.dq_meas = park_transform(foc.ab_meas, angle);
 
-                            // Filter measured currents
-                            foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
-                            foc.dq_meas.q = foc.q_lpf->update(foc.dq_meas.q, current_time_us);
+                    // Filter measured currents
+                    foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
+                    foc.dq_meas.q = foc.q_lpf->update(foc.dq_meas.q, current_time_us);
 
-                            break;
-                        }
-
-
-                        case (TORQUE_CONTROL_MODE::CURRENT): {
-                            // Read reference and set q-axis set point
-                            float I_q = reference * limits.max_current;
-                            d_pid.set_setpoint(0.0);
-                            q_pid.set_setpoint(I_q);
-
-                            current_sensors->read();
-                            // // Measure current and transform
-                            foc.phase_current_meas = {current_sensors->get_current_a(),
-                                                        current_sensors->get_current_b(),
-                                                        current_sensors->get_current_c()};
-                            foc.ab_meas = clarke_transform(foc.phase_current_meas);
-                            foc.dq_meas = park_transform(foc.ab_meas, angle);
-
-                            // Filter measured currents
-                            foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
-                            foc.dq_meas.q = foc.q_lpf->update(foc.dq_meas.q, current_time_us);
-
-                            // // Update PID controllers
-                            foc.command_dq.d = d_pid.update(foc.dq_meas.d);
-                            foc.command_dq.q = q_pid.update(foc.dq_meas.q);
-                            //
-                            // // Generate voltage command from PID output
-                            set_phase_voltages(foc.command_dq);
-                            break;
-                        }
-                        default: break;
-                    }
-                    uint32_t end_time_us = micros();
-                    float loop_frequency = 1/((end_time_us - current_time_us)/1000000.0);
-                    if (current_time_ms - prev_millis >= 30) {
-                        telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
-                        telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {angle}});
-                        telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {velocity}});
-                        telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
-                                                                                        static_cast<float>(foc.phase_current_meas.current_b),
-                                                                                        static_cast<float>(foc.phase_current_meas.current_c)}});
-                        telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
-                                                                                                        static_cast<float>(foc.dq_meas.q),
-                                                                                                            0.0,
-                                                                                                            reference*limits.max_current}});
-                        telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {loop_frequency}});
-                        prev_millis = current_time_ms;
-                    }
+                    break;
                 }
-                break;
-            };
-            case (CONTROL_MODE::VELOCITY): {
-                while (true) {
+                case (TORQUE_CONTROL_MODE::CURRENT): {
+                    // Read reference and set q-axis set point
+                    float I_q = torque_reference;
+                    d_pid.set_setpoint(0.0);
+                    q_pid.set_setpoint(I_q);
 
+                    current_sensors->read();
+                    // // Measure current and transform
+                    foc.phase_current_meas = {current_sensors->get_current_a(),
+                                                current_sensors->get_current_b(),
+                                                current_sensors->get_current_c()};
+                    foc.ab_meas = clarke_transform(foc.phase_current_meas);
+                    foc.dq_meas = park_transform(foc.ab_meas, angle);
+
+                    // Filter measured currents
+                    foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
+                    foc.dq_meas.q = foc.q_lpf->update(foc.dq_meas.q, current_time_us);
+
+                    // // Update PID controllers
+                    foc.command_dq.d = d_pid.update(foc.dq_meas.d);
+                    foc.command_dq.q = q_pid.update(foc.dq_meas.q);
+                    //
+                    // // Generate voltage command from PID output
+                    set_phase_voltages(foc.command_dq);
+                    break;
                 }
-                break;
-            };
-            default: break;
-        }
+                default: break;
+            }
+            uint32_t end_time_us = micros();
+            float loop_frequency = 1/((end_time_us - current_time_us)/1000000.0);
+            if (current_time_ms - prev_millis >= 30) {
+                telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
+                                                                                static_cast<float>(foc.phase_current_meas.current_b),
+                                                                                static_cast<float>(foc.phase_current_meas.current_c)}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
+                                                                                                static_cast<float>(foc.dq_meas.q),
+                                                                                                    0.0,
+                                                                                                    torque_reference}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {loop_frequency}});
+                prev_millis = current_time_ms;
+            }
+        } // End of master control loop
     }
 
     void Maxwell::sinusoidal_position_control() {
@@ -1017,7 +1045,7 @@ namespace Maxwell {
                             250);
         PIDController velocity_pid_controller =
             PIDController(  0.05,
-                            1.0,
+                            3.0,
                             0.000,
                             0.0,
                             20,
