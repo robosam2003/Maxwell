@@ -15,7 +15,7 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_2">
-    <item row="0" column="0" rowspan="2">
+    <item row="2" column="0">
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
        <number>0</number>
@@ -185,15 +185,18 @@
              </property>
             </widget>
            </item>
-           <item row="0" column="1">
-            <widget class="QComboBox" name="connectionTypeComboBox"/>
-           </item>
            <item row="2" column="1">
             <widget class="QLabel" name="connectionLabel">
              <property name="text">
               <string/>
              </property>
             </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QComboBox" name="connectionTypeComboBox"/>
+           </item>
+           <item row="3" column="0" colspan="2">
+            <widget class="QTextBrowser" name="debugOutput"/>
            </item>
           </layout>
          </widget>

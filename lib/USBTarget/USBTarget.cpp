@@ -26,6 +26,13 @@ void USBTarget::send(const telemetry_packet &packet) {
     serial.write(buffer, packet_length); // Send type + data + newline
 }
 
+void USBTarget::DEBUG(const StringSumHelper &message) {
+    // ADD "DEBUG" PREFIX TO EASILY PARSE ON THE OTHER END
+    StringSumHelper buffer(message);
+    String debug_message = "DEBUG" + buffer + "\n";
+    serial.write(debug_message.c_str(), debug_message.length());
+}
+
 void USBTarget::generate_checksum(uint8_t *data, size_t length) {
     uint8_t checksum = 0;
     for (size_t i = 0; i < length; i++) {

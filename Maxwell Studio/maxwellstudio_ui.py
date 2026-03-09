@@ -17,7 +17,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QSizePolicy,
-    QTabWidget, QWidget)
+    QTabWidget, QTextBrowser, QWidget)
 
 from pyqtgraph import PlotWidget
 
@@ -129,15 +129,20 @@ class Ui_MainWindow(object):
 
         self.gridLayout.addWidget(self.label_3, 0, 0, 1, 1)
 
+        self.connectionLabel = QLabel(self.frame)
+        self.connectionLabel.setObjectName(u"connectionLabel")
+
+        self.gridLayout.addWidget(self.connectionLabel, 2, 1, 1, 1)
+
         self.connectionTypeComboBox = QComboBox(self.frame)
         self.connectionTypeComboBox.setObjectName(u"connectionTypeComboBox")
 
         self.gridLayout.addWidget(self.connectionTypeComboBox, 0, 1, 1, 1)
 
-        self.connectionLabel = QLabel(self.frame)
-        self.connectionLabel.setObjectName(u"connectionLabel")
+        self.debugOutput = QTextBrowser(self.frame)
+        self.debugOutput.setObjectName(u"debugOutput")
 
-        self.gridLayout.addWidget(self.connectionLabel, 2, 1, 1, 1)
+        self.gridLayout.addWidget(self.debugOutput, 3, 0, 1, 2)
 
 
         self.gridLayout_3.addWidget(self.frame, 1, 0, 1, 1)
@@ -147,7 +152,7 @@ class Ui_MainWindow(object):
         self.tab_2.setObjectName(u"tab_2")
         self.tabWidget.addTab(self.tab_2, "")
 
-        self.gridLayout_2.addWidget(self.tabWidget, 0, 0, 2, 1)
+        self.gridLayout_2.addWidget(self.tabWidget, 2, 0, 1, 1)
 
         MainWindow.setCentralWidget(self.centralwidget)
 

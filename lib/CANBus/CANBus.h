@@ -25,6 +25,8 @@ public:
     float read() override;
 
     void send(const telemetry_packet &packet) override;
+
+    void DEBUG(const StringSumHelper &message) override;
 };
 
 

@@ -7,7 +7,7 @@
 #include "Arduino.h"
 
 class PIDController {
-private:
+public:
     float _kp;
     float _ki;
     float _kd;
@@ -22,7 +22,6 @@ private:
     float _max_output;
     float _max_integral;  // Anti-windup control
 
-public:
     float _output;
 
     PIDController(float kp, float ki, float kd, float setpoint, float max_output, float max_integral);

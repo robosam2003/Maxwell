@@ -6,6 +6,8 @@
 #define MAXWELL_TELEMETRYTARGET_H
 #include <cstdint>
 #include <vector>
+#include <string>
+#include <WString.h>
 
 
 enum TELEMETRY_PACKET_TYPE : uint8_t {
@@ -29,7 +31,9 @@ class TelemetryTarget {
 
 public:
     virtual void send(const telemetry_packet& packet);
+    virtual void DEBUG(const StringSumHelper& message);
     virtual ~TelemetryTarget() = default;
+
 };
 
 

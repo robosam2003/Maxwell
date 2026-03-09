@@ -44,3 +44,7 @@ void CANBus::send(const telemetry_packet &packet) {
     // }
     digitalToggle(GREEN_LED_PIN);
 }
+
+void CANBus::DEBUG(const StringSumHelper &message) {
+    // Needs
+}

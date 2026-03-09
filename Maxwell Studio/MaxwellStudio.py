@@ -136,6 +136,13 @@ class SerialWorker(QObject):
                     line = self.ser.readline()
                     if not line:
                         continue
+                    # If it's a debug line (starts with 'DEBUG'), emit it as GENERAL text packet
+                    if line.startswith(b'DEBUG'):
+                        # It's a normal string: Write to debug output with timestamp
+                        line = line[5:].decode('utf-8', errors='replace')  # Remove 'DEBUG' prefix and decode
+                        self.packet_received.emit("DEBUG", [f"{line}"])
+                        continue
+
                     uint8_raw_values = [b for b in line.strip()]
                     packet_type = uint8_raw_values[0]
                     checksum_packet = uint8_raw_values[-1]
@@ -234,6 +241,10 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
     @Slot(str, list)
     def handle_packet(self, name: str, data_list: list):
+        if name == "DEBUG": # Handle debug messages as text output
+            timestamp = time.strftime("%H:%M:%S", time.localtime())
+            self.debugOutput.append(f"{timestamp}: {data_list[0]}")
+            return
         if name == "GENERAL":
             self.outputLabel.setText(f"GENERAL: {data_list}")
             return

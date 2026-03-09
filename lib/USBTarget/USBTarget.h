@@ -20,6 +20,7 @@ private:
 public:
     USBTarget();
     void send(const telemetry_packet& packet) override;
+    void DEBUG(const StringSumHelper &message) override;
     static void generate_checksum(uint8_t* data, size_t length);
 
 };

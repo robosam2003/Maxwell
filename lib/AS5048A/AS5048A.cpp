@@ -91,30 +91,33 @@ void AS5048A::update() {
     }
 
 
-    // Calculate velocity here
+    // // Calculate velocity here
     const float Ts = (current_time - prev_micros) * 1e-6;
     if (Ts > 100e-6) { // 100 microseconds - avoid calculating velocity if updates are too close together, which can cause noise
-        velocity = (absolute_angle - prev_absolute_angle) / Ts;
-        if (_direction == CCW) {
-            velocity = -velocity;
-        }
+        // velocity = (absolute_angle - prev_absolute_angle) / Ts;
+        // if (_direction == CCW) {
+        //     velocity = -velocity;
+        // }
         // prev_time_counts = current_time_counts;
+        if (calibrated) {
+            velocity_estimate = get_velocity_estimate(absolute_angle, Ts);
+            velocity = velocity_estimate; // Use velocity estimate for velocity output.
+        }
         prev_micros = current_time;
     }
-    // else {
-    //     velocity = velocity; // Return previous velocity if updates are too close together
-    // }
-
+    else {
+        velocity = velocity; // Return previous velocity if updates are too close together
+    }
     // (pos_filtered) ? absolute_angle = pos_lpf->update(absolute_angle, current_time) : 0;
 }
 
 float AS5048A::get_angle() {
     return absolute_angle;
-    // update();
-    if (_direction == CCW) {
-        return -absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
-    }
-    return absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
+    // // update();
+    // if (_direction == CCW) {
+    //     return -absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
+    // }
+    // return absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
 }
 
 float AS5048A::get_velocity() {
@@ -140,6 +143,28 @@ float AS5048A::get_velocity() {
     return velocity;
 }
 
+float AS5048A::get_velocity_estimate(float angle_meas, float Ts) {
+    // A tracking observer
+    // // This is proportional to 2 times the error
+    // float two_error = (_sin(angle_meas) * _cos(theta_est)) - (_cos(angle_meas) * _sin(theta_est));
+
+    // Lightweight PID:
+    float Kp = 100.0;
+    float Ki = 100.0;
+    float error = angle_meas - theta_est;
+
+    integral_observer += error * Ki * Ts;
+    float omega = Kp * error + integral_observer;
+
+    // angle_observer.set_setpoint(angle_meas);
+    // float omega = angle_observer.update(theta_est);
+
+    // Theta est is the integral of the estimated velocity
+    theta_est += (omega * Ts);
+    return omega;
+}
+
 void AS5048A::set_offset(float angle) {
+    calibrated = true;
     offset = angle;
 }
