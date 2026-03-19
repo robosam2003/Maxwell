@@ -53,6 +53,11 @@ enum SENSOR_TYPE {
     A_B,
 };
 
+enum SENSOR_LOCATION {
+    INTERNAL,
+    EXTERNAL_PORT
+};
+
 enum TORQUE_CONTROL_MODE {
     VOLTAGE,
     CURRENT
@@ -116,7 +121,7 @@ struct maxwell_config {
     CONTROL_MODE control_mode;
     SENSOR_TYPE sensor_type;
     TORQUE_CONTROL_MODE torque_control_mode;
-
+    SENSOR_LOCATION sensor_location;
     uint32_t pole_pairs;
     float encoder_offset = 0;
 

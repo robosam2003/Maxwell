@@ -97,7 +97,7 @@ class SerialWorker(QObject):
     packet_received = Signal(str, list)   # name, list_of_floats
     error = Signal(str)
 
-    def __init__(self, port: str = 'COM11', baud: int = 921600, timeout: float = 1.0):
+    def __init__(self, port: str = 'COM10', baud: int = 921600, timeout: float = 1.0):
         super().__init__()
         self.port = port
         self.baud = baud
@@ -227,7 +227,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
         # Start SerialWorker in its own QThread
         self.reader_thread = QThread()
-        self.reader = SerialWorker(port='COM11', baud=921600, timeout=1.0)
+        self.reader = SerialWorker(baud=921600, timeout=1.0)
         self.reader.moveToThread(self.reader_thread)
         self.reader.packet_received.connect(self.handle_packet)
         self.reader.error.connect(self.handle_worker_error)
@@ -237,6 +237,31 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
         self.update_plots_timer = QTimer()
         self.update_plots_timer.timeout.connect(self.update_plots)
         self.update_plots_timer.start(1) # Update every 10 ms
+
+        # Populate conneciton l
+
+
+        # self.connectionCombobox.currentIndexChanged.connect(self.update_connection)
+
+
+
+    # def update_connection(self, index):
+    #     global com_type
+    #     com_type = self.connectionCombobox.currentText()
+    #     print(f"Connection type changed to: {com_type}")
+    #     # Stop current worker and thread
+    #     self.reader.stop()
+    #     self.reader_thread.quit()
+    #     self.reader_thread.wait()
+    #
+    #     # Start new worker with updated connection type
+    #     self.reader = SerialWorker(baud=921600, timeout=1.0)
+    #     self.reader.moveToThread(self.reader_thread)
+    #     self.reader.packet_received.connect(self.handle_packet)
+    #     self.reader.error.connect(self.handle_worker_error)
+    #     self.reader_thread.started.connect(self.reader.start)
+    #     self.reader_thread.start()
+
 
 
     @Slot(str, list)

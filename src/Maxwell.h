@@ -35,9 +35,10 @@ namespace Maxwell {
             COMMAND_SOURCE::PWM,
             TELEMETRY_TARGET::TELEMETRY_USB,
             MOTOR_TYPE::BLDC,
-            CONTROL_MODE::TORQUE,
+            CONTROL_MODE::VELOCITY,
             SENSOR_TYPE::MAGNETIC,
             TORQUE_CONTROL_MODE::CURRENT,
+            SENSOR_LOCATION::INTERNAL,
             POLE_PAIRS_6374,
             0.0,
             {2.0, 0, 0, limits.max_current, 1},
@@ -48,7 +49,7 @@ namespace Maxwell {
             {true, 2.0},
             {false, 2.0},
             {true, 10.0}
-            };
+        };
     public:
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
@@ -109,25 +110,19 @@ namespace Maxwell {
 
         void sensor_offset_calibration();
 
+        float find_resistance(float voltage);
+
+        float find_flux_linkage();
+
+        float find_inductance();
+
+        void motor_calibration();
+
         void load_control_config();
 
         void motor_control();
 
         void bldc_control();
-
-
-
-
-        // legacy control loops - to be removed once the new control loop structure is in place
-        void sinusoidal_position_control();
-
-        void voltage_torque_control();
-
-        void voltage_position_control();
-
-        void dc_current_torque_control();
-
-        void foc_current_torque_control();
 
 
 

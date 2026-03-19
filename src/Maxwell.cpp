@@ -32,14 +32,18 @@ namespace Maxwell {
         driver->default_configuration();
 
         // TODO: Make the choice between internal and external encoder a config option
-        // encoder = new AS5048( // Internal encoder
-        //     AS5048A_CS_PIN,
-        //     SPI_1,
-        //     1000000); // 1 MHz SPI frequency
-        encoder = new AS5048 ( // External encoder
-            EXTERNAL_ENCODER_CS_PIN,
-            SPI_2,
-            10000000); // 1 MHz SPI frequency
+        if (config.sensor_location == SENSOR_LOCATION::INTERNAL) {
+            encoder = new AS5048( // Internal encoder
+                AS5048A_CS_PIN,
+                SPI_1,
+                1000000); // 1 MHz SPI frequency
+        }
+        else {
+            encoder = new AS5048 ( // External encoder
+                EXTERNAL_ENCODER_CS_PIN,
+                SPI_2,
+                1000000); // 1 MHz SPI frequency
+        }
         // encoder = new AS5048(AS5048::INT); // DMA Mode
 
         // External encoder
@@ -381,8 +385,11 @@ namespace Maxwell {
 
         float average_diff = 0;
         float theta = 0;
-        for (long i=0; i<50000; i++) {
-            theta += 0.0005;
+        float theta_inc = 0.005;
+        int theta_inc_len = int(_2PI / theta_inc);
+
+        for (long i=0; i<theta_inc_len; i++) {
+            theta += theta_inc;
             // theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
@@ -393,8 +400,8 @@ namespace Maxwell {
         }
         encoder->update();
         float top_angle = encoder->get_angle();
-        for (long i=0; i<50000; i++) {
-            theta -= 0.0005;
+        for (long i=0; i<theta_inc_len; i++) {
+            theta -= theta_inc;
             // theta = fmod(theta, _2PI);
             encoder->update();
             if (i%1000==0) {
@@ -500,6 +507,74 @@ namespace Maxwell {
         //     i++;
         // }
         // set_phase_voltages(0, 0, 0);
+    }
+
+    float Maxwell::find_resistance(float voltage) {
+        constexpr int buf_size = 128;
+
+        float d_axis_voltage = 1.5;
+        float d_axis_currents[buf_size];
+        set_phase_voltages({d_axis_voltage, 0}, 0);
+        delay(20); // Let value settle
+        for (int i=0; i<buf_size; i++) {
+            encoder->update();
+            current_sensors->read();
+            PhaseCurrents c = {current_sensors->get_current_a(),
+                                current_sensors->get_current_b(),
+                                current_sensors->get_current_c()};
+            ab_struct ab = clarke_transform(c);
+            dq_struct dq = park_transform(ab, encoder->get_angle());
+            d_axis_currents[i] = dq.d;
+
+            delay(1);
+        }
+        set_phase_voltages(0, 0, 0); // Turn off voltage
+        // Average the current readings to reduce noise
+        double average_d_axis_current = mean(d_axis_currents, buf_size);
+        double resistance = d_axis_voltage / average_d_axis_current;
+        telemetry->DEBUG("Resistance: " + String(resistance));
+        return resistance;
+    }
+
+    float Maxwell::find_flux_linkage() {
+        // Spin the motor at a constant speed, observe the results
+
+
+
+    }
+
+    float Maxwell::find_inductance() {
+        // Perform motor calibration sequence to find Rs, Ld, and Lq
+        // float Vds [buf_size];
+        // float Vqs [buf_size];
+        // float Ids [buf_size];
+        // float Iqs [buf_size];
+
+
+
+    }
+
+    void Maxwell::motor_calibration() {
+        init_pwm_3x();
+
+        // Setup components for bldc_control
+        driver->enable(true); // Enable driver in 3x mode
+        driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
+
+        // Perform motor calibration sequence to find Rs, Ld, and Lq
+        // float Vds [buf_size];
+        // float Vqs [buf_size];
+        // float Ids [buf_size];
+        // float Iqs [buf_size];
+
+        // Resistance calculation
+        // - Apply small d-axis voltage, measure current.
+        // - R = V/I
+        float Rs = find_resistance(1.5);
+
+
+
+
     }
 
     void Maxwell::load_control_config() {

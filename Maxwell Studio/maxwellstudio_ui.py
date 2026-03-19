@@ -144,6 +144,16 @@ class Ui_MainWindow(object):
 
         self.gridLayout.addWidget(self.debugOutput, 3, 0, 1, 2)
 
+        self.connectionCombobox = QComboBox(self.frame)
+        self.connectionCombobox.setObjectName(u"connectionCombobox")
+
+        self.gridLayout.addWidget(self.connectionCombobox, 1, 1, 1, 1)
+
+        self.label_5 = QLabel(self.frame)
+        self.label_5.setObjectName(u"label_5")
+
+        self.gridLayout.addWidget(self.label_5, 1, 0, 1, 1)
+
 
         self.gridLayout_3.addWidget(self.frame, 1, 0, 1, 1)
 
@@ -173,6 +183,7 @@ class Ui_MainWindow(object):
         self.label_4.setText(QCoreApplication.translate("MainWindow", u"Connected to: ", None))
         self.label_3.setText(QCoreApplication.translate("MainWindow", u"Connection Type:", None))
         self.connectionLabel.setText("")
+        self.label_5.setText(QCoreApplication.translate("MainWindow", u"Connection", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QCoreApplication.translate("MainWindow", u"Tab 1", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), QCoreApplication.translate("MainWindow", u"Tab 2", None))
     # retranslateUi

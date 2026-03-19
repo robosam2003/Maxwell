@@ -114,8 +114,17 @@ inline PhaseCurrents reverse_clarke_transform(const ab_struct &ab_vec) {
 }
 
 
+inline float sum(float* arr, int size) {
+    float s = 0;
+    for (int i=0; i<size; i++) {
+        s += arr[i];
+    }
+    return s;
+}
 
-
+inline float mean(float* arr, int size) {
+    return sum(arr, size) / size;
+}
 
 
 
