@@ -23,7 +23,7 @@ import can
 import time
 import struct
 
-BUFFER_SIZE = 200
+BUFFER_SIZE = 500
 
 # List of Pens
 pens = [
@@ -227,7 +227,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
         # Start SerialWorker in its own QThread
         self.reader_thread = QThread()
-        self.reader = SerialWorker(port='COM3', baud=921600, timeout=1.0)
+        self.reader = SerialWorker(port='COM10', baud=921600, timeout=1.0)
         self.reader.moveToThread(self.reader_thread)
         self.reader.packet_received.connect(self.handle_packet)
         self.reader.error.connect(self.handle_worker_error)

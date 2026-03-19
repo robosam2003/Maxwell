@@ -2,10 +2,10 @@
 // Created by robos on 20/12/2025.
 //
 
-#include "AS5048A.h"
+#include "AS5048.h"
 
 
-uint16_t AS5048A::read_reg(REGISTER regAddress) {
+uint16_t AS5048::read_reg(REGISTER regAddress) {
     uint16_t result = 0;
     uint16_t word = (READ_BYTE << 8) | regAddress; // add read bit
     // Add parity bit using xor (even parity)
@@ -20,11 +20,12 @@ uint16_t AS5048A::read_reg(REGISTER regAddress) {
     result = _spi.transfer16(word); // Send the address byte
     digitalWrite(_CS, HIGH); // Pull CS high to end the SPI transaction
     _spi.endTransaction(); // End the SPI transaction
-    result = result & 0x3FFF; // Mask the 2 MSB bits - data is 14 bits
+
     return result;
 }
 
-void AS5048A::write_reg(REGISTER regAddress, uint16_t value) {
+
+void AS5048::write_reg(REGISTER regAddress, uint16_t value) {
     uint16_t word = (WRITE_BYTE << 8) | regAddress; // add write bit
     // Add parity bit using xor (even parity)
     uint16_t parityBit = 0;
@@ -41,7 +42,44 @@ void AS5048A::write_reg(REGISTER regAddress, uint16_t value) {
     _spi.endTransaction(); // End the SPI transaction
 }
 
-AS5048A::AS5048A(byte CS, SPIClass& spi, uint32_t spiFreq) {
+uint16_t AS5048::read_angle_reg() {
+    uint16_t result = read_reg(REGISTER::ANGLE);
+    bool error_flag = false;
+
+    // Calculate Parity
+    uint16_t recieve_parity = (result >> 15) & 0x1; // Extract the parity bit from the received word
+    uint16_t calculated_parity = 0;
+    uint16_t recieved_word = result & 0x7FFF; // Mask out the parity bit to get the original 15 bits
+    for (int i = 0; i < 15; i++) {
+        calculated_parity ^= (recieved_word >> i) & 0x1;
+    }
+
+    // Handle parity error
+    if (calculated_parity != recieve_parity) { // Parity error
+        error_flag = true;
+        errors.parity_error_cnt++;
+    }
+
+    // errors.error_flag = get_error();
+    if ((result >> 14) & 0x1) {  // Check the error bit (bit 14)
+        error_flag = true;
+        errors.error_flag_cnt++;
+        errors.error_flag = get_error();
+    }
+    else {
+        errors.error_flag = ERROR::NO_ERROR;
+    }
+
+    // if (error_flag) {
+    //     // Handle error - return 0;
+    //     return 0;
+    // }
+    // Otherwise, return the actual angle
+    result = result & 0x3FFF; // Mask the 2 MSB bits - data is 14 bits
+    return result;
+}
+
+AS5048::AS5048(byte CS, SPIClass& spi, uint32_t spiFreq) {
     _CS = CS;
     _spi = spi;
     // Set up SPI settings - SPI MODE 1 because data is captured on the falling edge of the clock
@@ -62,9 +100,13 @@ AS5048A::AS5048A(byte CS, SPIClass& spi, uint32_t spiFreq) {
     // Begin the SPI bus.
     _spi.begin();
 
+    errors.parity_error_cnt = 0;
+    errors.error_flag_cnt = 0;
+    errors.delta_jump_error_cnt = 0;
+    errors.error_flag = get_error(); // Initialise error flag
 }
 
-void AS5048A::update() {
+void AS5048::update() {
     prev_absolute_angle = absolute_angle; // Store the angle from previous update
     uint32_t current_time = micros();
     // int current_time_counts = static_cast<int>(timer->getCount()); // in microseconds
@@ -75,14 +117,20 @@ void AS5048A::update() {
     // double Ts = (current_time_counts - prev_time_counts) * 11.9e-9; // Convert to seconds
 
 
-    uint16_t angle = read_reg(REGISTER::ANGLE);
+    uint16_t angle = read_angle_reg();
+    if (errors.error_flag != ERROR::NO_ERROR) {
+        // Handle error - for now, just return previous angle and velocity (could extrapolate?)
+        return;
+    }
     float angle_raw_val = (static_cast<float>(angle) / 16384.0f) * _2PI; // Convert to radians
     float d_angle = angle_raw_val - prev_raw_angle;
+
     if (abs(d_angle) > 0.5f*_2PI) { // This relies on the update() method being called frequently enough
         full_rotations += (d_angle > 0) ? -1 : 1;
     }
     prev_raw_angle = angle_raw_val;
     absolute_angle = (static_cast<float>(full_rotations) * _2PI) + prev_raw_angle;
+
     if (_direction == CCW) {
         absolute_angle = -absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
     }
@@ -90,8 +138,14 @@ void AS5048A::update() {
         absolute_angle = absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
     }
 
+    if (abs(absolute_angle - prev_absolute_angle) > MAX_DELTA_ANGLE) {
+        // Handle error - this is likely a glitch in the reading, so ignore it and return previous angle and velocity
+        // absolute_angle = prev_absolute_angle;
+        // return;
+        errors.delta_jump_error_cnt++;
+    }
 
-    // // Calculate velocity here
+    // // Calculate velocity
     const float Ts = (current_time - prev_micros) * 1e-6;
     if (Ts > 100e-6) { // 100 microseconds - avoid calculating velocity if updates are too close together, which can cause noise
         // velocity = (absolute_angle - prev_absolute_angle) / Ts;
@@ -109,9 +163,10 @@ void AS5048A::update() {
         velocity = velocity; // Return previous velocity if updates are too close together
     }
     // (pos_filtered) ? absolute_angle = pos_lpf->update(absolute_angle, current_time) : 0;
+
 }
 
-float AS5048A::get_angle() {
+float AS5048::get_angle() {
     return absolute_angle;
     // // update();
     // if (_direction == CCW) {
@@ -120,7 +175,7 @@ float AS5048A::get_angle() {
     // return absolute_angle - offset; // Return the absolute angle in radians, adjusted for direction and offset
 }
 
-float AS5048A::get_velocity() {
+float AS5048::get_velocity() {
     // // int current_time_counts = static_cast<int>(timer->getCount()); // in microseconds
     // // if (current_time_counts < prev_time_counts) {
     // //     // Timer overflowed - adjust previous time accordingly
@@ -143,14 +198,14 @@ float AS5048A::get_velocity() {
     return velocity;
 }
 
-float AS5048A::get_velocity_estimate(float angle_meas, float Ts) {
+float AS5048::get_velocity_estimate(float angle_meas, float Ts) {
     // A tracking observer
     // // This is proportional to 2 times the error
     // float two_error = (_sin(angle_meas) * _cos(theta_est)) - (_cos(angle_meas) * _sin(theta_est));
 
     // Lightweight PID:
     float Kp = 100.0;
-    float Ki = 100.0;
+    float Ki = 300.0;
     float error = angle_meas - theta_est;
 
     integral_observer += error * Ki * Ts;
@@ -164,7 +219,19 @@ float AS5048A::get_velocity_estimate(float angle_meas, float Ts) {
     return omega;
 }
 
-void AS5048A::set_offset(float angle) {
+AS5048::ERROR AS5048::get_error() {
+    // Bit 0 is framing error
+    // Bit 1 is command invalid
+    // Bit 2 is parity error
+    uint16_t error_reg = read_reg(REGISTER::CLEAR_ERROR);
+    ERROR error = ERROR::NO_ERROR;
+    (error_reg & 0x1) ? error = ERROR::FRAMING_ERROR   : 0;
+    (error_reg & 0x2) ? error = ERROR::COMMAND_INVALID : 0;
+    (error_reg & 0x4) ? error = ERROR::PARITY_ERROR    : 0;
+    return error;
+}
+
+void AS5048::set_offset(float angle) {
     calibrated = true;
     offset = angle;
 }

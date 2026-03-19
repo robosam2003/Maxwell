@@ -9,7 +9,8 @@
 #include "DRV8323.h"
 // #include "AS5047P.h"
 #include "PositionSensor.h"
-#include "AS5048A.h"
+#include "AS5048.h"
+#include "AS5600.h"
 
 // #include "FreeRTOS.h"
 // #include "task.h"
@@ -67,14 +68,15 @@ namespace Maxwell {
         test_config t_config;
 
         FOC foc;
-        float input_voltage = 24.0; ;
+        float input_voltage = 24.0;
         limits_struct limits = { // Absorb into config struct?
-            .max_voltage = 20.0,
-            .max_current = 15.0,
-            .align_voltage = 1.5,
+            .max_voltage = 23.0,
+            .max_current = 10.0,
+            .align_voltage = 3.0,
             .max_velocity = 500.0, // in radians per second
             .max_position = _2PI * 100/2 // 50mm stroke, with 2mm lead
         };
+
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
         // float align_voltage = 2; // V

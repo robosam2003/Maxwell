@@ -5,9 +5,11 @@
 #include "Maxwell.h"
 
 #include <ratio>
+#include <Wire.h>
 #include <FreeRTOS/Source/include/FreeRTOS.h>
 
 #include "AS5047P.h"
+#include "FreeRTOS.h"
 #include "FreeRTOS/Source/include/FreeRTOS.h"
 
 namespace Maxwell {
@@ -27,17 +29,20 @@ namespace Maxwell {
             DRV8323_HI_B_PIN,
             DRV8323_HI_C_PIN,
             DRV8323_GATE_EN_PIN);
+        driver->default_configuration();
 
         // TODO: Make the choice between internal and external encoder a config option
-        encoder = new AS5048A( // Internal encoder
-            AS5048A_CS_PIN,
-            SPI_1,
-            1000000); // 1 MHz SPI frequency
-        // encoder = new AS5048A ( // External encoder
-        //     EXTERNAL_ENCODER_CS_PIN,
-        //     SPI_2,
-        //     10000); // 1 MHz SPI frequency
+        // encoder = new AS5048( // Internal encoder
+        //     AS5048A_CS_PIN,
+        //     SPI_1,
+        //     1000000); // 1 MHz SPI frequency
+        encoder = new AS5048 ( // External encoder
+            EXTERNAL_ENCODER_CS_PIN,
+            SPI_2,
+            10000); // 1 MHz SPI frequency
 
+        // External encoder
+        // encoder = new AS5600(CS_SDA2_RX3_EXTI_PIN, SCK2_SCL2_TX3_EXTI_PIN, 10000); // 10 kHz I2C frequency
 
         /*
          * Instantiate all Command Sources and Telemetry Targets
@@ -125,10 +130,10 @@ namespace Maxwell {
         telemetry->DEBUG("Maxwell Setup complete");
 
         // Let velocity estimate stabilise before starting control loop
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < 50; i++) {
             encoder->update();
             // telemetry->DEBUG("Reading: " + String(encoder->get_angle()));
-            delay(1);
+            delay(10);
         }
     }
 
@@ -583,6 +588,7 @@ namespace Maxwell {
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
+
         float dq_kp = 5.0;
         float dq_ki = 30.0;
 
@@ -711,8 +717,9 @@ namespace Maxwell {
             }
             uint32_t end_time_us = micros();
             float loop_frequency = 1/((end_time_us - current_time_us)/1000000.0);
-            if (current_time_ms - prev_millis >= 30) {
-                telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
+            if (current_time_ms - prev_millis >= 100) {
+                // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
+                // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
@@ -722,8 +729,11 @@ namespace Maxwell {
                                                                                                 static_cast<float>(foc.dq_meas.q),
                                                                                                     0.0,
                                                                                                     torque_reference}});
-                // telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {loop_frequency}});
-                // telemetry->DEBUG("Loop frequency: " + String(loop_frequency) + " Hz");
+                telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {loop_frequency}});
+                // if (a == "")
+
+                telemetry->DEBUG(driver->get_fault_status_1_string() + " / " + driver->get_fault_status_2_string());
+                telemetry->DEBUG(static_cast<String>(encoder->errors.parity_error_cnt) + " / " + static_cast<String>(encoder->errors.error_flag_cnt) + " / " + static_cast<String>(encoder->errors.error_flag) + "/" + static_cast<String>(encoder->errors.delta_jump_error_cnt));
                 prev_millis = current_time_ms;
             }
         } // End of master control loop

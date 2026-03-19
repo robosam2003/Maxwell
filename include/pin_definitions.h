@@ -129,6 +129,8 @@
 
 // External Encoder
 #define EXTERNAL_ENCODER_CS_PIN     PB11
+#define CS_SDA2_RX3_EXTI_PIN        PB11
+#define SCK2_SCL2_TX3_EXTI_PIN      PB10
 
 
 
