@@ -75,7 +75,7 @@
 
 #ifdef HARDWARE_V2_0
 
-// AS5047P Magnetic Encoder
+// AS5047P Magnetic Encoder - INTERNAL
 #define AS5048A_SPI_BUS             SPI1
 #define AS5048A_CS_PIN              PC13
 

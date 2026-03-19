@@ -6,6 +6,7 @@
 
 
 uint16_t AS5048::read_reg(REGISTER regAddress) {
+    const uint16_t NOP = 0x0000;
     uint16_t result = 0;
     uint16_t word = (READ_BYTE << 8) | regAddress; // add read bit
     // Add parity bit using xor (even parity)
@@ -20,6 +21,13 @@ uint16_t AS5048::read_reg(REGISTER regAddress) {
     result = _spi.transfer16(word); // Send the address byte
     digitalWrite(_CS, HIGH); // Pull CS high to end the SPI transaction
     _spi.endTransaction(); // End the SPI transaction
+
+    // Now send NOP to read result
+    _spi.beginTransaction(_settings);
+    digitalWrite(_CS, LOW);
+    result = _spi.transfer16(NOP);
+    digitalWrite(_CS, HIGH);
+    _spi.endTransaction();
 
     return result;
 }
@@ -116,7 +124,7 @@ void AS5048::update() {
     // }
     // double Ts = (current_time_counts - prev_time_counts) * 11.9e-9; // Convert to seconds
 
-
+    // Read from sensor
     uint16_t angle = read_angle_reg();
     if (errors.error_flag != ERROR::NO_ERROR) {
         // Handle error - for now, just return previous angle and velocity (could extrapolate?)

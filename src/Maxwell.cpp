@@ -39,7 +39,8 @@ namespace Maxwell {
         encoder = new AS5048 ( // External encoder
             EXTERNAL_ENCODER_CS_PIN,
             SPI_2,
-            10000); // 1 MHz SPI frequency
+            10000000); // 1 MHz SPI frequency
+        // encoder = new AS5048(AS5048::INT); // DMA Mode
 
         // External encoder
         // encoder = new AS5600(CS_SDA2_RX3_EXTI_PIN, SCK2_SCL2_TX3_EXTI_PIN, 10000); // 10 kHz I2C frequency
@@ -378,38 +379,38 @@ namespace Maxwell {
         encoder->update();
         float zero_angle = encoder->get_angle();
 
-        // float average_diff = 0;
-        // float theta = 0;
-        // for (long i=0; i<50000; i++) {
-        //     theta += 0.0005;
-        //     // theta = fmod(theta, _2PI);
-        //     encoder->update();
-        //     if (i%1000==0) {
-        //         telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta,encoder->get_angle()}});
-        //     }
-        //     average_diff = (average_diff * i + (encoder->get_angle()*config.pole_pairs - theta)) / (i+1);
-        //     set_phase_voltages({limits.align_voltage, 0}, theta);
-        // }
-        // encoder->update();
-        // float top_angle = encoder->get_angle();
-        // for (long i=0; i<50000; i++) {
-        //     theta -= 0.0005;
-        //     // theta = fmod(theta, _2PI);
-        //     encoder->update();
-        //     if (i%1000==0) {
-        //         telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta, encoder->get_angle()}});
-        //     }
-        //     average_diff = (average_diff * i + (encoder->get_angle()*config.pole_pairs - theta)) / (i+1);
-        //     set_phase_voltages({limits.align_voltage, 0}, theta);
-        // }
-        // float bottom_angle = encoder->get_angle();
-        // // Offset is the bottom angle (we should now be at zero electrical angle)
-        // float off = average_diff;
-        // encoder->set_offset(off);
-        set_phase_voltages({limits.align_voltage, 0}, 0);
-        delay(700);
+        float average_diff = 0;
+        float theta = 0;
+        for (long i=0; i<50000; i++) {
+            theta += 0.0005;
+            // theta = fmod(theta, _2PI);
+            encoder->update();
+            if (i%1000==0) {
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta,encoder->get_angle()}});
+            }
+            average_diff = (average_diff * i + (encoder->get_angle()*config.pole_pairs - theta)) / (i+1);
+            set_phase_voltages({limits.align_voltage, 0}, theta);
+        }
         encoder->update();
-        float off = encoder->get_angle();
+        float top_angle = encoder->get_angle();
+        for (long i=0; i<50000; i++) {
+            theta -= 0.0005;
+            // theta = fmod(theta, _2PI);
+            encoder->update();
+            if (i%1000==0) {
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {theta, encoder->get_angle()}});
+            }
+            average_diff = (average_diff * i + (encoder->get_angle()*config.pole_pairs - theta)) / (i+1);
+            set_phase_voltages({limits.align_voltage, 0}, theta);
+        }
+        float bottom_angle = encoder->get_angle();
+        // Offset is the bottom angle (we should now be at zero electrical angle)
+        float off = bottom_angle;
+        encoder->set_offset(off);
+        // set_phase_voltages({limits.align_voltage, 0}, 0);
+        // delay(700);
+        // encoder->update();
+        // float off = encoder->get_angle();
         encoder->set_offset(off);
         telemetry->send({GENERAL, {off}});
 
@@ -626,6 +627,7 @@ namespace Maxwell {
         float pos_ref = 0.0;
         float vel_ref = 0.0;
         float torque_reference = 0.0;
+        float homing_theta = 0.0;
         uint32_t prev_millis = millis();
         while (true) { // Master control loop
             // For all control cases, the following things are read/measured at the start of the loop:
@@ -633,6 +635,7 @@ namespace Maxwell {
             uint32_t current_time_us = micros();
             float reference = command_source->read();             // Read command from command source
             reference = foc.input_lpf->update(reference, current_time_us);  // Filter command
+            reference = motor_direction * reference; // Apply motor direction from config
 
             // Update encoder and get angle and velocity
             encoder->update();
@@ -656,7 +659,14 @@ namespace Maxwell {
                     break;
                 };
                 case (CONTROL_MODE::POSITION) : {
-                    pos_ref = reference * limits.max_position;
+                    if (pos_homed) {
+                        pos_ref = reference * limits.max_position + homed_position_offset + 0.5 * motor_direction;
+                    }
+                    else {
+                        homing_theta -= (motor_direction * 0.003);
+                        pos_ref = homing_theta;
+                    }
+
                     position_pid.set_setpoint(pos_ref);
                     vel_ref = position_pid.update(angle);
                     velocity_pid.set_setpoint(vel_ref);
@@ -670,7 +680,7 @@ namespace Maxwell {
             switch (config.torque_control_mode) {
                 case (TORQUE_CONTROL_MODE::VOLTAGE): {
                     // TORQUE CONTROL, with TORQUE CONTROL MODE
-                    float U_q = torque_reference;
+                    float U_q = torque_reference; // In voltage control mode, the torque reference is directly the q-axis voltage
                     set_phase_voltages({0, U_q});
                     current_sensors->read();
 
@@ -700,6 +710,14 @@ namespace Maxwell {
                                                 current_sensors->get_current_c()};
                     foc.ab_meas = clarke_transform(foc.phase_current_meas);
                     foc.dq_meas = park_transform(foc.ab_meas, angle);
+
+                    if (!pos_homed) {
+                        if (abs(foc.dq_meas.q) > 7.0) {
+                            pos_homed = true;
+                            homed_position_offset = angle;
+                            telemetry->DEBUG("Position homed! Offset: " + String(homed_position_offset));
+                        }
+                    }
 
                     // Filter measured currents
                     foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
@@ -732,8 +750,12 @@ namespace Maxwell {
                 telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {loop_frequency}});
                 // if (a == "")
 
-                telemetry->DEBUG(driver->get_fault_status_1_string() + " / " + driver->get_fault_status_2_string());
-                telemetry->DEBUG(static_cast<String>(encoder->errors.parity_error_cnt) + " / " + static_cast<String>(encoder->errors.error_flag_cnt) + " / " + static_cast<String>(encoder->errors.error_flag) + "/" + static_cast<String>(encoder->errors.delta_jump_error_cnt));
+                // telemetry->DEBUG(driver->get_fault_status_1_string() + " / " + driver->get_fault_status_2_string());
+                telemetry->DEBUG(static_cast<String>(encoder->errors.parity_error_cnt) + " / " +
+                                        static_cast<String>(encoder->errors.error_flag_cnt) + " / " +
+                                        static_cast<String>(encoder->errors.error_flag) + "/" +
+                                        static_cast<String>(encoder->errors.delta_jump_error_cnt) + " / " +
+                                            static_cast<String>(encoder->errors.magnitude));
                 prev_millis = current_time_ms;
             }
         } // End of master control loop

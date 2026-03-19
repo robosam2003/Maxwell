@@ -47,7 +47,7 @@ namespace Maxwell {
             {true, 2.0},
             {true, 2.0},
             {false, 2.0},
-            {true, 5.0}
+            {true, 10.0}
             };
     public:
         DRV8323::DRV8323* driver;
@@ -67,16 +67,18 @@ namespace Maxwell {
         maxwell_config config;
         test_config t_config;
 
+        bool pos_homed = false;
+        float homed_position_offset = 0.0;
         FOC foc;
         float input_voltage = 24.0;
         limits_struct limits = { // Absorb into config struct?
             .max_voltage = 23.0,
             .max_current = 10.0,
-            .align_voltage = 3.0,
-            .max_velocity = 500.0, // in radians per second
-            .max_position = _2PI * 100/2 // 50mm stroke, with 2mm lead
+            .align_voltage = 1.5,
+            .max_velocity = 300.0, // in radians per second
+            .max_position = _2PI * 70/2 // 50mm stroke, with 2mm lead
         };
-
+        MOTOR_DIRECTION motor_direction = MOTOR_DIRECTION::CCW;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
         // float align_voltage = 2; // V

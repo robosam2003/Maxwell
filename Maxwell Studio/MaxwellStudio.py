@@ -97,7 +97,7 @@ class SerialWorker(QObject):
     packet_received = Signal(str, list)   # name, list_of_floats
     error = Signal(str)
 
-    def __init__(self, port: str = 'COM3', baud: int = 921600, timeout: float = 1.0):
+    def __init__(self, port: str = 'COM11', baud: int = 921600, timeout: float = 1.0):
         super().__init__()
         self.port = port
         self.baud = baud
@@ -227,7 +227,7 @@ class MaxwellStudio(maxwellstudio_ui.Ui_MainWindow, QMainWindow):
 
         # Start SerialWorker in its own QThread
         self.reader_thread = QThread()
-        self.reader = SerialWorker(port='COM10', baud=921600, timeout=1.0)
+        self.reader = SerialWorker(port='COM11', baud=921600, timeout=1.0)
         self.reader.moveToThread(self.reader_thread)
         self.reader.packet_received.connect(self.handle_packet)
         self.reader.error.connect(self.handle_worker_error)

@@ -83,13 +83,13 @@ struct lpf_config {
     bool enabled;
     double cutoff_frequency;
 };
-
+enum MOTOR_DIRECTION {
+    MOTOR_CW = 1,
+    MOTOR_CCW = -1
+};
 
 struct motorTypeSchema {
-    enum MOTOR_DIRECTION {
-        CW = 1,
-        CCW = -1
-    };
+
 
 public:
     MOTOR_DIRECTION direction;

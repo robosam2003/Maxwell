@@ -18,6 +18,7 @@ struct error_struct {
     uint32_t error_flag_cnt;
     uint16_t error_flag;
     uint16_t delta_jump_error_cnt;
+    float magnitude;
 };
 
 class PositionSensor {
