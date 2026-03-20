@@ -580,6 +580,24 @@ namespace Maxwell {
         telemetry->DEBUG("Lq: (uH) " + String(Lq*1e6, 7));
     }
 
+    float Maxwell::estimate_bemf_angle() {
+        prev_bemf_angle = bemf_angle;
+        // estimate bemf based on applied voltage and current readings
+        ab_struct bemf = {foc.command_ab.alpha - Rs*foc.ab_meas.alpha,
+                        foc.command_ab.beta - Rs*foc.ab_meas.beta};
+        if (max(abs(bemf.alpha), abs(bemf.beta)) < 0.2) { // This could create offset -
+            // If the estimated bemf is very small, it's likely just noise - don't update the angle estimate
+            return absolute_bemf_angle;
+        }
+        bemf_angle = atan2(bemf.beta, bemf.alpha);
+        float d_angle = bemf_angle - prev_bemf_angle;
+        if (abs(d_angle) > 0.5f*_2PI) { // This relies on the update() method being called frequently enough
+            bemf_full_rotations += (d_angle > 0) ? -1 : 1;
+        }
+        absolute_bemf_angle = ((_2PI * bemf_full_rotations) + bemf_angle) / config.pole_pairs;
+        return absolute_bemf_angle;
+    }
+
     void Maxwell::motor_calibration() {
         init_pwm_3x();
 
@@ -684,9 +702,12 @@ namespace Maxwell {
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
-        float cl_bw = 12000; // Hz
-        float dq_kp = 5;//cl_bw * L;  // about 2
-        float dq_ki = 30;//cl_bw * Rs; // about 900
+        float cl_bw = _2PI * 1452;
+        float dq_kp = 5;  //cl_bw * L;
+        float dq_ki = 30; //cl_bw * Rs;
+
+        telemetry->DEBUG("DQ KP: " + String(dq_kp, 7));
+        telemetry->DEBUG("DQ KI: " + String(dq_ki, 7));
 
         // Must not be pointers!
         PIDController d_pid =
@@ -737,6 +758,7 @@ namespace Maxwell {
             float angle = encoder->get_angle();
             float velocity = encoder->get_velocity();
             // velocity = foc.velocity_lpf->update(velocity, current_time_us);
+            estimate_bemf_angle();
 
             // switch control mode to generate correct torque reference for the torque control loop
             switch (config.control_mode) {
@@ -804,7 +826,7 @@ namespace Maxwell {
                     foc.ab_meas = clarke_transform(foc.phase_current_meas);
                     foc.dq_meas = park_transform(foc.ab_meas, angle);
 
-                    if (!pos_homed) {
+                    if (config.control_mode == POSITION and !pos_homed) {
                         if (abs(foc.dq_meas.q) > 7.0) {
                             pos_homed = true;
                             homed_position_offset = angle;
@@ -819,9 +841,11 @@ namespace Maxwell {
                     // // Update PID controllers
                     foc.command_dq.d = d_pid.update(foc.dq_meas.d);
                     foc.command_dq.q = q_pid.update(foc.dq_meas.q);
+                    foc.command_ab = reverse_park_transform(foc.command_dq, angle);
                     //
                     // // Generate voltage command from PID output
                     set_phase_voltages(foc.command_dq);
+
                     break;
                 }
                 default: break;
@@ -831,14 +855,16 @@ namespace Maxwell {
             if (current_time_ms - prev_millis >= 30) {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
                 // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
+                // telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {angle, absolute_bemf_angle}});
+
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
                                                                                 static_cast<float>(foc.phase_current_meas.current_b),
                                                                                 static_cast<float>(foc.phase_current_meas.current_c)}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND_VOLTAGES, {foc.phase_voltage_meas.voltage_a,
-                                                                                                    foc.phase_voltage_meas.voltage_b,
-                                                                                                    foc.phase_voltage_meas.voltage_c}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND_VOLTAGES, {static_cast<float>(foc.command_dq.d),
+                                                                                        static_cast<float>(foc.command_dq.q)}});
+
                 telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
                                                                                                 static_cast<float>(foc.dq_meas.q),
                                                                                                     0.0,
@@ -847,11 +873,11 @@ namespace Maxwell {
                 // if (a == "")
 
                 // telemetry->DEBUG(driver->get_fault_status_1_string() + " / " + driver->get_fault_status_2_string());
-                telemetry->DEBUG(static_cast<String>(encoder->errors.parity_error_cnt) + " / " +
-                                        static_cast<String>(encoder->errors.error_flag_cnt) + " / " +
-                                        static_cast<String>(encoder->errors.error_flag) + "/" +
-                                        static_cast<String>(encoder->errors.delta_jump_error_cnt) + " / " +
-                                            static_cast<String>(encoder->errors.magnitude));
+                // telemetry->DEBUG(static_cast<String>(encoder->errors.parity_error_cnt) + " / " +
+                //                         static_cast<String>(encoder->errors.error_flag_cnt) + " / " +
+                //                         static_cast<String>(encoder->errors.error_flag) + "/" +
+                //                         static_cast<String>(encoder->errors.delta_jump_error_cnt) + " / " +
+                //                             static_cast<String>(encoder->errors.magnitude));
                 prev_millis = current_time_ms;
             }
         } // End of master control loop

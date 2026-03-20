@@ -86,6 +86,10 @@ namespace Maxwell {
         float L  = 222e-6; // Average of Ld and Lq
         float Ld = 186e-6;
         float Lq = 257e-6;
+        int bemf_full_rotations = 0;
+        float prev_bemf_angle = 0.0;
+        float bemf_angle = 0.0;
+        float absolute_bemf_angle = 0.0;
 
         MOTOR_DIRECTION motor_direction = MOTOR_DIRECTION::CCW;
         pwm_3x_struct* pwm_3x;
@@ -123,6 +127,8 @@ namespace Maxwell {
         float find_flux_linkage();
 
         float find_inductance(float v_d, float v_q);
+
+        float estimate_bemf_angle();
 
         void motor_calibration();
 

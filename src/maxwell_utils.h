@@ -138,6 +138,14 @@ inline float mean(float* arr, int size) {
     return sum(arr, size) / size;
 }
 
+inline float norm(float* arr, int size) { // norm of a vector
+    float s = 0;
+    for (int i=0; i<size; i++) {
+        s += arr[i]*arr[i];
+    }
+    s = sqrt(s);
+    return s;
+}
 
 
 
