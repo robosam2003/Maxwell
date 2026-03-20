@@ -102,20 +102,21 @@
 #define DRV8323_BRAKE_PIN           DRV8323_LO_C_PIN
 
 // Current sensing
-#define CURR_SENSE_A_PIN            PA2
-#define CURR_SENSE_B_PIN            PA1
-#define CURR_SENSE_C_PIN            PA0
+#define CURR_SENSE_A_PIN            PA2 // ADC3_IN2
+#define CURR_SENSE_B_PIN            PA1 // ADC2_IN1
+#define CURR_SENSE_C_PIN            PA0 // ADC1_IN0
+#define PHASE_CSA_GAIN              20.0
 
 // CAN
 #define CAN1_TX_PIN                 PB9
 #define CAN1_RX_PIN                 PB8
 
 // Voltage Sense
-#define V_SENSE_A_PIN               PA3
-#define V_SENSE_B_PIN               PC1
-#define V_SENSE_C_PIN               PC0
+#define V_SENSE_A_PIN               PA3 // ADC3_IN3
+#define V_SENSE_B_PIN               PC1 // ADC2_IN11
+#define V_SENSE_C_PIN               PC0 // ADC1_IN10
 
-#define V_SUPPLY_SENSE_PIN          PA4
+#define V_SUPPLY_SENSE_PIN          PA4 // ADC2_IN4
 
 // Other
 #define GREEN_LED_PIN				PB7

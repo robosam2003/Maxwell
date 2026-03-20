@@ -10,7 +10,6 @@
 #include <SPI.h>
 #include "../../include/pin_definitions.h"
 #include "../../include/config.h"
-#include "current_sensors.h"
 #include "HardwareTimer.h"
 
 

@@ -8,7 +8,7 @@
 
 // #define HARDWARE_V1_0
 #define HARDWARE_V2_0
-#define SENSE_CONVERSION_FACTOR  ((3.3 / 4096) * 19.0)
+#define VOLTAGE_SENSE_CONVERSION_FACTOR  ((3.3 / 4096) * 19.0)
 #define CURRENT_SENSE_CONVERSION_FACTOR ((3.3 / 4096))
 #define POLE_PAIRS_6374 11 // 14 poles = 7 pole pairs
 

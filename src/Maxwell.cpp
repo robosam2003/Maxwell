@@ -59,10 +59,13 @@ namespace Maxwell {
         // Telemetry Targets
         usb_target = new USBTarget();
 
-        current_sensors = new CurrentSensors(CURR_SENSE_A_PIN,
-                                             CURR_SENSE_B_PIN,
-                                             CURR_SENSE_C_PIN,
-                                             _csa_gain);
+        adc = new Adc(CURR_SENSE_A_PIN,
+                     CURR_SENSE_B_PIN,
+                     CURR_SENSE_C_PIN,
+                     V_SENSE_A_PIN,
+                     V_SENSE_B_PIN,
+                     V_SENSE_C_PIN,
+                     V_SUPPLY_SENSE_PIN);
 
         pwm_3x = new pwm_3x_struct();
         encoder->_direction = SENSOR_DIRECTION::CW; // Confirmed via testing
@@ -100,11 +103,6 @@ namespace Maxwell {
 
 
         pinMode(DRV8323_GATE_EN_PIN, OUTPUT);
-
-        pinMode(V_SENSE_A_PIN, INPUT);
-        pinMode(V_SENSE_B_PIN, INPUT);
-        pinMode(V_SENSE_C_PIN, INPUT);
-        pinMode(V_SUPPLY_SENSE_PIN, INPUT);
 
         // __HAL_RCC_ADC1_CLK_ENABLE();
         // __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -179,20 +177,22 @@ namespace Maxwell {
 
         pwm_3x->TIM_A->setMode(pwm_3x->channel_a, PWM_MODE, pin_a);
         pwm_3x->TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 0;
+        pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 1;
+        // pwm_3x->TIM_A->getHandle()->Instance->CCR1
+        // Set timer direction
         pwm_3x->TIM_A->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_A->setCaptureCompare(pwm_3x->channel_a, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
         // pwm_3x->TIM_A->attachInterrupt(Update_A_callback);
 
         pwm_3x->TIM_B->setMode(pwm_3x->channel_b, PWM_MODE, pin_b);
         pwm_3x->TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_B->getHandle()->Init.RepetitionCounter = 0;
+        pwm_3x->TIM_B->getHandle()->Init.RepetitionCounter = 1;
         pwm_3x->TIM_B->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_B->setCaptureCompare(pwm_3x->channel_b, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
 
         pwm_3x->TIM_C->setMode(pwm_3x->channel_c, PWM_MODE, pin_c);
         pwm_3x->TIM_C->getHandle()->Init.CounterMode = COUNTER_MODE;
-        pwm_3x->TIM_C->getHandle()->Init.RepetitionCounter = 0;
+        pwm_3x->TIM_C->getHandle()->Init.RepetitionCounter = 1;
         pwm_3x->TIM_C->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_C->setCaptureCompare(pwm_3x->channel_c, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
 
@@ -353,18 +353,18 @@ namespace Maxwell {
     void Maxwell::set_phase_voltages(const dq_struct &command_dq) {
         encoder->update();
         ab_struct command_ab = reverse_park_transform(command_dq, encoder->get_angle());
-        PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
-        set_phase_voltages(command_voltages.current_a,
-                            command_voltages.current_b,
-                            command_voltages.current_c);
+        PhaseVoltages command_voltages = reverse_clarke_transform(command_ab);
+        set_phase_voltages(command_voltages.voltage_a,
+                            command_voltages.voltage_b,
+                            command_voltages.voltage_c);
     }
 
     void Maxwell::set_phase_voltages(const dq_struct &command_dq, float theta) {
         ab_struct command_ab = reverse_park_transform(command_dq, theta/POLE_PAIRS_6374);
-        PhaseCurrents command_voltages = reverse_clarke_transform(command_ab);
-        set_phase_voltages(command_voltages.current_a,
-                            command_voltages.current_b,
-                            command_voltages.current_c);
+        PhaseVoltages command_voltages = reverse_clarke_transform(command_ab);
+        set_phase_voltages(command_voltages.voltage_a,
+                            command_voltages.voltage_b,
+                            command_voltages.voltage_c);
     }
 
     void Maxwell::all_off() {
@@ -512,16 +512,14 @@ namespace Maxwell {
     float Maxwell::find_resistance(float voltage) {
         constexpr int buf_size = 128;
 
-        float d_axis_voltage = 1.5;
+        float d_axis_voltage = voltage;
         float d_axis_currents[buf_size];
         set_phase_voltages({d_axis_voltage, 0}, 0);
         delay(20); // Let value settle
         for (int i=0; i<buf_size; i++) {
             encoder->update();
-            current_sensors->read();
-            PhaseCurrents c = {current_sensors->get_current_a(),
-                                current_sensors->get_current_b(),
-                                current_sensors->get_current_c()};
+            adc->read();
+            PhaseCurrents c = adc->get_phase_currents();
             ab_struct ab = clarke_transform(c);
             dq_struct dq = park_transform(ab, encoder->get_angle());
             d_axis_currents[i] = dq.d;
@@ -530,28 +528,56 @@ namespace Maxwell {
         }
         set_phase_voltages(0, 0, 0); // Turn off voltage
         // Average the current readings to reduce noise
-        double average_d_axis_current = mean(d_axis_currents, buf_size);
-        double resistance = d_axis_voltage / average_d_axis_current;
-        telemetry->DEBUG("Resistance: " + String(resistance));
+        float average_d_axis_current = mean(d_axis_currents, buf_size);
+        float resistance = d_axis_voltage / average_d_axis_current;
+        Rs = resistance;
+        telemetry->DEBUG("Resistance: (mOhm) " + String(resistance*1e3, 7));
         return resistance;
     }
 
     float Maxwell::find_flux_linkage() {
         // Spin the motor at a constant speed, observe the results
-
-
-
+        // CAN be calculated from KV rating
+        float fl = (1/kv_rating) * 60 / (2 * PI); // use kv_rating from
+        flux_linkage = fl;
+        return fl;
     }
 
-    float Maxwell::find_inductance() {
-        // Perform motor calibration sequence to find Rs, Ld, and Lq
-        // float Vds [buf_size];
-        // float Vqs [buf_size];
-        // float Ids [buf_size];
-        // float Iqs [buf_size];
+    float Maxwell::find_inductance(float v_d, float v_q) {
+        // Perform motor calibration sequence to find Ld and Lq
+        constexpr int buf_size = 128*5;
+        float d_currs[buf_size];
+        float q_currs[buf_size];
+        float vels[buf_size];
 
+        for (int i=0; i<200; i++) {
+            set_phase_voltages({v_d, v_q});
+            delay(1);
+        }
+        // delay(200); // Allow values to settle
+        for (int i=0; i<buf_size; i++) {
+            set_phase_voltages({v_d, v_q});
+            encoder->update();
+            vels[i] = encoder->get_velocity(); // mechanical velocity in rads/s
+            adc->read();
+            PhaseCurrents c = adc->get_phase_currents();
+            ab_struct ab = clarke_transform(c);
+            dq_struct dq = park_transform(ab, encoder->get_angle());
+            // Store d and q axis currents for later processing
+            d_currs[i] = dq.d;
+            q_currs[i] = dq.q;
+            delay(1);
+        }
+        set_phase_voltages(0, 0, 0); // Turn off voltage
+        float Id = mean(d_currs, buf_size);
+        float Iq = mean(q_currs, buf_size);
+        float average_omega = mean(vels, buf_size) * config.pole_pairs; // convert to electrical velocity
 
-
+        Ld = (v_q - Rs*Iq - flux_linkage*average_omega) / (average_omega*Id);
+        Lq = (Rs*Id - v_d) / (average_omega*Iq);
+        telemetry->DEBUG("Average Omega: " + String(average_omega, 7)); delay(10);
+        telemetry->DEBUG("Ld: (uH) " + String(Ld*1e6, 7)); delay(10);
+        telemetry->DEBUG("Lq: (uH) " + String(Lq*1e6, 7));
     }
 
     void Maxwell::motor_calibration() {
@@ -561,18 +587,10 @@ namespace Maxwell {
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
-        // Perform motor calibration sequence to find Rs, Ld, and Lq
-        // float Vds [buf_size];
-        // float Vqs [buf_size];
-        // float Ids [buf_size];
-        // float Iqs [buf_size];
-
-        // Resistance calculation
-        // - Apply small d-axis voltage, measure current.
-        // - R = V/I
-        float Rs = find_resistance(1.5);
-
-
+        find_resistance(2.5);
+        // find_resistance(4.0);
+        delay(500);
+        find_inductance(1.0, 1.5); // Freezes up after this?  ???
 
 
     }
@@ -641,6 +659,8 @@ namespace Maxwell {
     }
 
     void Maxwell::motor_control() {
+        // motor_calibration();
+
         // Interpret the current config, and call the relevant control loop (e.g. sinusoidal position control, voltage control, current control etc.)
         switch (config.motor_type) {
             case (MOTOR_TYPE::DC): {
@@ -664,9 +684,9 @@ namespace Maxwell {
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
-
-        float dq_kp = 5.0;
-        float dq_ki = 30.0;
+        float cl_bw = 12000; // Hz
+        float dq_kp = 5;//cl_bw * L;  // about 2
+        float dq_ki = 30;//cl_bw * Rs; // about 900
 
         // Must not be pointers!
         PIDController d_pid =
@@ -757,12 +777,11 @@ namespace Maxwell {
                     // TORQUE CONTROL, with TORQUE CONTROL MODE
                     float U_q = torque_reference; // In voltage control mode, the torque reference is directly the q-axis voltage
                     set_phase_voltages({0, U_q});
-                    current_sensors->read();
+                    adc->read();
 
                     // // Measure current and transform
-                    foc.phase_current_meas = {current_sensors->get_current_a(),
-                                                current_sensors->get_current_b(),
-                                                current_sensors->get_current_c()};
+                    foc.phase_current_meas = adc->get_phase_currents();
+                    foc.phase_voltage_meas = adc->get_phase_voltages();
                     foc.ab_meas = clarke_transform(foc.phase_current_meas);
                     foc.dq_meas = park_transform(foc.ab_meas, angle);
 
@@ -778,11 +797,10 @@ namespace Maxwell {
                     d_pid.set_setpoint(0.0);
                     q_pid.set_setpoint(I_q);
 
-                    current_sensors->read();
+                    adc->read();
                     // // Measure current and transform
-                    foc.phase_current_meas = {current_sensors->get_current_a(),
-                                                current_sensors->get_current_b(),
-                                                current_sensors->get_current_c()};
+                    foc.phase_current_meas = adc->get_phase_currents();
+                    foc.phase_voltage_meas = adc->get_phase_voltages();
                     foc.ab_meas = clarke_transform(foc.phase_current_meas);
                     foc.dq_meas = park_transform(foc.ab_meas, angle);
 
@@ -810,14 +828,17 @@ namespace Maxwell {
             }
             uint32_t end_time_us = micros();
             float loop_frequency = 1/((end_time_us - current_time_us)/1000000.0);
-            if (current_time_ms - prev_millis >= 100) {
+            if (current_time_ms - prev_millis >= 30) {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
                 // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
                                                                                 static_cast<float>(foc.phase_current_meas.current_b),
                                                                                 static_cast<float>(foc.phase_current_meas.current_c)}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND_VOLTAGES, {foc.phase_voltage_meas.voltage_a,
+                                                                                                    foc.phase_voltage_meas.voltage_b,
+                                                                                                    foc.phase_voltage_meas.voltage_c}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
                                                                                                 static_cast<float>(foc.dq_meas.q),
                                                                                                     0.0,

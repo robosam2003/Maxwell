@@ -5,6 +5,10 @@
 #ifndef MAXWELL_MAXWELL_UTILS_H
 #define MAXWELL_MAXWELL_UTILS_H
 
+#include "../lib/RCFilter/RCFilter.h"
+#include "../lib/pid_controller/pid_controller.h"
+
+
 struct ab_struct {
     double alpha;
     double beta;
@@ -19,6 +23,12 @@ struct PhaseCurrents {
     double current_a;
     double current_b;
     double current_c;
+};
+
+struct PhaseVoltages {
+    float voltage_a;
+    float voltage_b;
+    float voltage_c;
 };
 
 struct Currents {
@@ -43,7 +53,9 @@ struct FOC { // Everything that needs initialised must be a pointer
 
     dq_struct command_dq;
     ab_struct command_ab;
-    PhaseCurrents command_voltages;  // Are these voltages or currents?
+    PhaseVoltages command_voltages;  // Are these voltages or currents?
+
+    PhaseVoltages phase_voltage_meas;
 };
 
 struct pwm_3x_struct {
@@ -102,15 +114,15 @@ inline ab_struct reverse_park_transform(const dq_struct &dq_vec, float theta) { 
     return alpha_beta;
 }
 
-inline PhaseCurrents reverse_clarke_transform(const ab_struct &ab_vec) {
+inline PhaseVoltages reverse_clarke_transform(const ab_struct &ab_vec) {
     // PhaseCurrents currents = {(2/3)*ab_vec.alpha,
     //                     (-1/3)*ab_vec.alpha + (sqrt(3)/3)*ab_vec.beta,
     //                     (-1/3)*ab_vec.alpha - (sqrt(3)/3)*ab_vec.beta};
-    PhaseCurrents currents;
-    currents.current_a = ab_vec.alpha;
-    currents.current_b = (-ab_vec.alpha + M_SQRT3*ab_vec.beta) / 2;
-    currents.current_c = (-ab_vec.alpha - M_SQRT3*ab_vec.beta) / 2;
-    return currents;
+    PhaseVoltages voltages;
+    voltages.voltage_a = ab_vec.alpha;
+    voltages.voltage_b = (-ab_vec.alpha + M_SQRT3*ab_vec.beta) / 2;
+    voltages.voltage_c = (-ab_vec.alpha - M_SQRT3*ab_vec.beta) / 2;
+    return voltages;
 }
 
 

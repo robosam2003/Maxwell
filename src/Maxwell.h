@@ -17,7 +17,7 @@
 #include "HallSensor.h"
 #include "pid_controller.h"
 #include "PWMInput.h"
-#include "current_sensors.h"
+#include "adc.h"
 #include "maxwell_config.h"
 #include "maxwell_utils.h"
 #include "TelemetryTarget.h"
@@ -54,7 +54,7 @@ namespace Maxwell {
         DRV8323::DRV8323* driver;
         HallSensor* hall_sensor;
         PositionSensor* encoder;
-        CurrentSensors* current_sensors;
+        Adc* adc;
 
         // Command Sources / Telemetry Targets
         CommandSource* command_source;
@@ -79,6 +79,14 @@ namespace Maxwell {
             .max_velocity = 300.0, // in radians per second
             .max_position = _2PI * 70/2 // 50mm stroke, with 2mm lead
         };
+        // Motor params
+        float kv_rating = 330;
+        float flux_linkage;
+        float Rs = 90e-3;
+        float L  = 222e-6; // Average of Ld and Lq
+        float Ld = 186e-6;
+        float Lq = 257e-6;
+
         MOTOR_DIRECTION motor_direction = MOTOR_DIRECTION::CCW;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
@@ -114,7 +122,7 @@ namespace Maxwell {
 
         float find_flux_linkage();
 
-        float find_inductance();
+        float find_inductance(float v_d, float v_q);
 
         void motor_calibration();
 
