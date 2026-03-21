@@ -35,9 +35,9 @@ namespace Maxwell {
             COMMAND_SOURCE::PWM,
             TELEMETRY_TARGET::TELEMETRY_USB,
             MOTOR_TYPE::BLDC,
-            CONTROL_MODE::VELOCITY,
+            CONTROL_MODE::TORQUE,
             SENSOR_TYPE::MAGNETIC,
-            TORQUE_CONTROL_MODE::CURRENT,
+            TORQUE_CONTROL_MODE::VOLTAGE,
             SENSOR_LOCATION::INTERNAL,
             POLE_PAIRS_6374,
             0.0,
@@ -86,9 +86,18 @@ namespace Maxwell {
         float L  = 222e-6; // Average of Ld and Lq
         float Ld = 186e-6;
         float Lq = 257e-6;
-        int bemf_full_rotations = 0;
+
+        float prev_velocity = 0.0;
+        float velocity = 0.0;
+        float theta = 0.0;
+        float theta_est = 0.0;
+        float integral_observer = 0.0;
+        uint32_t prev_observer_micros = 0;
+
+        int bemf_full_elec_rotations = 0;
+        int bemf_full_mech_rotations = 0;
         float prev_bemf_angle = 0.0;
-        float bemf_angle = 0.0;
+        float raw_bemf_angle = 0.0;
         float absolute_bemf_angle = 0.0;
 
         MOTOR_DIRECTION motor_direction = MOTOR_DIRECTION::CCW;
@@ -129,6 +138,8 @@ namespace Maxwell {
         float find_inductance(float v_d, float v_q);
 
         float estimate_bemf_angle();
+
+        void update_observer(float angle_meas, uint32_t current_time_us);
 
         void motor_calibration();
 

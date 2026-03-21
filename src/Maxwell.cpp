@@ -135,6 +135,7 @@ namespace Maxwell {
         // Let velocity estimate stabilise before starting control loop
         for (int i = 0; i < 50; i++) {
             encoder->update();
+            update_observer(encoder->get_angle(), micros());
             // telemetry->DEBUG("Reading: " + String(encoder->get_angle()));
             delay(10);
         }
@@ -360,7 +361,7 @@ namespace Maxwell {
     }
 
     void Maxwell::set_phase_voltages(const dq_struct &command_dq, float theta) {
-        ab_struct command_ab = reverse_park_transform(command_dq, theta/POLE_PAIRS_6374);
+        ab_struct command_ab = reverse_park_transform(command_dq, theta / POLE_PAIRS_6374);
         PhaseVoltages command_voltages = reverse_clarke_transform(command_ab);
         set_phase_voltages(command_voltages.voltage_a,
                             command_voltages.voltage_b,
@@ -581,21 +582,53 @@ namespace Maxwell {
     }
 
     float Maxwell::estimate_bemf_angle() {
-        prev_bemf_angle = bemf_angle;
+        // Extract elec_rotations, and prev_bemf angle from absolute_bemf_angle (so absolute_bemf_angle can be used as update mechanism)
+        bemf_full_elec_rotations = floor(absolute_bemf_angle * config.pole_pairs / _2PI);
+        prev_bemf_angle = absolute_bemf_angle * config.pole_pairs - bemf_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
+
+
+
+        // prev_bemf_angle = raw_bemf_angle;
         // estimate bemf based on applied voltage and current readings
         ab_struct bemf = {foc.command_ab.alpha - Rs*foc.ab_meas.alpha,
                         foc.command_ab.beta - Rs*foc.ab_meas.beta};
-        if (max(abs(bemf.alpha), abs(bemf.beta)) < 0.2) { // This could create offset -
-            // If the estimated bemf is very small, it's likely just noise - don't update the angle estimate
-            return absolute_bemf_angle;
+        // if (max(abs(bemf.alpha), abs(bemf.beta)) < 0.2) { // This could create offset -
+        //     // If the estimated bemf is very small, it's likely just noise - don't update the angle estimate
+        //     return absolute_bemf_angle;
+        // }
+        raw_bemf_angle = atan2(bemf.beta, bemf.alpha); // Outputs [-PI, PI]
+        raw_bemf_angle = raw_bemf_angle - floor(raw_bemf_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
+        float d_angle = raw_bemf_angle - prev_bemf_angle;
+        if (abs(d_angle) > 0.5f*_2PI) { // wrap around
+            bemf_full_elec_rotations += (d_angle > 0) ? -1 : 1;
         }
-        bemf_angle = atan2(bemf.beta, bemf.alpha);
-        float d_angle = bemf_angle - prev_bemf_angle;
-        if (abs(d_angle) > 0.5f*_2PI) { // This relies on the update() method being called frequently enough
-            bemf_full_rotations += (d_angle > 0) ? -1 : 1;
-        }
-        absolute_bemf_angle = ((_2PI * bemf_full_rotations) + bemf_angle) / config.pole_pairs;
+        // absolute_bemf_angle = (bemf_full_mech_rotations * _2PI) + ((bemf_full_elec_rotations * _2PI) + raw_bemf_angle) / config.pole_pairs;
+        absolute_bemf_angle = ((_2PI * bemf_full_elec_rotations) + raw_bemf_angle) / config.pole_pairs;
         return absolute_bemf_angle;
+    }
+
+    void Maxwell::update_observer(float angle_meas, uint32_t current_time_us) {
+        float Ts = (current_time_us - prev_observer_micros) * 1e-6;
+        if (Ts > 100e-6) { // only update if there's a reasonable amount of time passed.
+            // A tracking observer
+            // // This is proportional to 2 times the error
+            // float two_error = (_sin(angle_meas) * _cos(theta_est)) - (_cos(angle_meas) * _sin(theta_est));
+
+            // Lightweight PID:
+            float Kp = 100.0;
+            float Ki = 300.0;
+            float error = angle_meas - theta_est;
+
+            integral_observer += error * Ki * Ts;
+            velocity = Kp * error + integral_observer;
+
+            // angle_observer.set_setpoint(angle_meas);
+            // float omega = angle_observer.update(theta_est);
+
+            // Theta est is the integral of the estimated velocity
+            theta_est += (velocity * Ts);
+            prev_observer_micros = current_time_us; // Update the previous timestamp
+        }
     }
 
     void Maxwell::motor_calibration() {
@@ -744,7 +777,10 @@ namespace Maxwell {
         float vel_ref = 0.0;
         float torque_reference = 0.0;
         float homing_theta = 0.0;
+        float angle = 0.0;
+        float encoder_angle = 0.0;
         uint32_t prev_millis = millis();
+        uint32_t prev_micros = micros();
         while (true) { // Master control loop
             // For all control cases, the following things are read/measured at the start of the loop:
             uint32_t current_time_ms = millis();
@@ -753,12 +789,31 @@ namespace Maxwell {
             reference = foc.input_lpf->update(reference, current_time_us);  // Filter command
             reference = motor_direction * reference; // Apply motor direction from config
 
-            // Update encoder and get angle and velocity
             encoder->update();
-            float angle = encoder->get_angle();
-            float velocity = encoder->get_velocity();
+            angle = encoder->get_angle();
+            // transition from encoder to bemf
+            if (abs(velocity) < 50.0) {
+                // Use encoder as angle estimate
+
+
+
+                absolute_bemf_angle = angle; // Update bemf estimator
+                // estimate_bemf_angle();
+
+                // angle = encoder_angle;
+            }
+            else {
+                // At higher speeds, use bemf estimate
+                estimate_bemf_angle();
+            }
+
+            // Update the observer for velocity prediction
+            update_observer(angle, current_time_us);
+            // prev_velocity = velocity;
+
+
+            // velocity = encoder->get_velocity();
             // velocity = foc.velocity_lpf->update(velocity, current_time_us);
-            estimate_bemf_angle();
 
             // switch control mode to generate correct torque reference for the torque control loop
             switch (config.control_mode) {
@@ -798,7 +853,7 @@ namespace Maxwell {
                 case (TORQUE_CONTROL_MODE::VOLTAGE): {
                     // TORQUE CONTROL, with TORQUE CONTROL MODE
                     float U_q = torque_reference; // In voltage control mode, the torque reference is directly the q-axis voltage
-                    set_phase_voltages({0, U_q});
+                    set_phase_voltages({0, U_q}, angle*POLE_PAIRS_6374);
                     adc->read();
 
                     // // Measure current and transform
@@ -822,7 +877,7 @@ namespace Maxwell {
                     adc->read();
                     // // Measure current and transform
                     foc.phase_current_meas = adc->get_phase_currents();
-                    foc.phase_voltage_meas = adc->get_phase_voltages();
+                    // foc.phase_voltage_meas = adc->get_phase_voltages();
                     foc.ab_meas = clarke_transform(foc.phase_current_meas);
                     foc.dq_meas = park_transform(foc.ab_meas, angle);
 
@@ -844,7 +899,7 @@ namespace Maxwell {
                     foc.command_ab = reverse_park_transform(foc.command_dq, angle);
                     //
                     // // Generate voltage command from PID output
-                    set_phase_voltages(foc.command_dq);
+                    set_phase_voltages(foc.command_dq, angle*POLE_PAIRS_6374);
 
                     break;
                 }
@@ -856,7 +911,7 @@ namespace Maxwell {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
                 // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {angle, absolute_bemf_angle}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder_angle, absolute_bemf_angle}});
 
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
