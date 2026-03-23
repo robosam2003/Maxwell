@@ -586,17 +586,15 @@ namespace Maxwell {
         bemf_full_elec_rotations = floor(absolute_bemf_angle * config.pole_pairs / _2PI);
         prev_bemf_angle = absolute_bemf_angle * config.pole_pairs - bemf_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
 
-
-
         // prev_bemf_angle = raw_bemf_angle;
         // estimate bemf based on applied voltage and current readings
         ab_struct bemf = {foc.command_ab.alpha - Rs*foc.ab_meas.alpha,
-                        foc.command_ab.beta - Rs*foc.ab_meas.beta};
+                           foc.command_ab.beta - Rs*foc.ab_meas.beta};
         // if (max(abs(bemf.alpha), abs(bemf.beta)) < 0.2) { // This could create offset -
         //     // If the estimated bemf is very small, it's likely just noise - don't update the angle estimate
         //     return absolute_bemf_angle;
         // }
-        raw_bemf_angle = atan2(bemf.beta, bemf.alpha); // Outputs [-PI, PI]
+        raw_bemf_angle = atan2(bemf.beta, bemf.alpha) + _PI_2; // Outputs [-PI, PI]
         raw_bemf_angle = raw_bemf_angle - floor(raw_bemf_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
         float d_angle = raw_bemf_angle - prev_bemf_angle;
         if (abs(d_angle) > 0.5f*_2PI) { // wrap around
@@ -736,8 +734,8 @@ namespace Maxwell {
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
         float cl_bw = _2PI * 1452;
-        float dq_kp = 5;  //cl_bw * L;
-        float dq_ki = 30; //cl_bw * Rs;
+        float dq_kp = cl_bw * L;
+        float dq_ki = cl_bw * Rs;
 
         telemetry->DEBUG("DQ KP: " + String(dq_kp, 7));
         telemetry->DEBUG("DQ KI: " + String(dq_ki, 7));
@@ -765,6 +763,7 @@ namespace Maxwell {
                             0.0,
                             limits.max_current,
                             limits.max_current);
+
         PIDController position_pid =
             PIDController(  10,
                             0.1,
@@ -779,6 +778,8 @@ namespace Maxwell {
         float homing_theta = 0.0;
         float angle = 0.0;
         float encoder_angle = 0.0;
+        float use_bemf_threshold = 50.0;
+        bool using_bemf_estimate = false;
         uint32_t prev_millis = millis();
         uint32_t prev_micros = micros();
         while (true) { // Master control loop
@@ -789,22 +790,35 @@ namespace Maxwell {
             reference = foc.input_lpf->update(reference, current_time_us);  // Filter command
             reference = motor_direction * reference; // Apply motor direction from config
 
-            encoder->update();
-            angle = encoder->get_angle();
-            // transition from encoder to bemf
-            if (abs(velocity) < 50.0) {
-                // Use encoder as angle estimate
 
+            if (abs(velocity) < use_bemf_threshold) {
+                // Use encoder as angle estimate
+                encoder->update();
+                angle = encoder->get_angle();
+
+                using_bemf_estimate = false;
 
 
                 absolute_bemf_angle = angle; // Update bemf estimator
-                // estimate_bemf_angle();
+                estimate_bemf_angle();
 
                 // angle = encoder_angle;
             }
+            // else if (abs(velocity) < use_bemf_threshold and using_bemf_estimate == true) {
+            //     // At very low speeds, the encoder can be very noisy - use a blend of encoder and bemf estimate
+            //     // Update the encoder angle
+            //     encoder->absolute_angle = absolute_bemf_angle; // Encoder will decode this
+            //     encoder->update();
+            //     angle = encoder->get_angle();
+            //     using_bemf_estimate = false;
+            //     absolute_bemf_angle = angle; // Update bemf estimator
+            // }
+
             else {
                 // At higher speeds, use bemf estimate
-                estimate_bemf_angle();
+                using_bemf_estimate = true;
+                angle = estimate_bemf_angle();
+                encoder->absolute_angle = absolute_bemf_angle; // Keep encoder count up to date
             }
 
             // Update the observer for velocity prediction
@@ -911,7 +925,7 @@ namespace Maxwell {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
                 // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder_angle, absolute_bemf_angle}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->absolute_angle- absolute_bemf_angle}});
 
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
