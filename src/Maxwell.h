@@ -47,7 +47,7 @@ namespace Maxwell {
             {20, 0, 0, limits.max_velocity, limits.max_velocity},
             {true, 2.0},
             {true, 2.0},
-            {false, 2.0},
+            {true, 10.0},
             {true, 10.0}
         };
     public:
@@ -94,11 +94,17 @@ namespace Maxwell {
         float integral_observer = 0.0;
         uint32_t prev_observer_micros = 0;
 
-        int bemf_full_elec_rotations = 0;
+        int flux_full_elec_rotations = 0;
         int bemf_full_mech_rotations = 0;
-        float prev_bemf_angle = 0.0;
-        float raw_bemf_angle = 0.0;
-        float absolute_bemf_angle = 0.0;
+        float prev_flux_angle = 0.0;
+        float raw_flux_angle = 0.0;
+        float absolute_flux_angle = 0.0;
+        float Psi_alpha = 0.0;
+        float Psi_beta = 0.0;
+        uint32_t prev_flux_estimator_micros = micros();
+
+
+
 
         MOTOR_DIRECTION motor_direction = MOTOR_DIRECTION::CCW;
         pwm_3x_struct* pwm_3x;
@@ -137,7 +143,7 @@ namespace Maxwell {
 
         float find_inductance(float v_d, float v_q);
 
-        float estimate_bemf_angle();
+        float estimate_flux_angle(uint32_t current_time_us);
 
         void update_observer(float angle_meas, uint32_t current_time_us);
 

@@ -116,7 +116,7 @@ AS5048::AS5048(byte CS, SPIClass& spi, uint32_t spiFreq) {
 
 void AS5048::update() {
     prev_absolute_angle = absolute_angle; // Store the angle from previous update
-    // Decompose absolute angle into full rotations and raw angle for easier handling of wraparound
+    // Decompose absolute angle into full rotations and raw angle for easier handling of position update (from external source e.g. flux observer)
     full_rotations = floor(absolute_angle / _2PI);
     prev_raw_angle = (absolute_angle + offset) - (full_rotations * _2PI); // Add offset back to raw angle for easier handling of direction and offset in the angle reading
 

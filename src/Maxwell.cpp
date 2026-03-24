@@ -581,28 +581,34 @@ namespace Maxwell {
         telemetry->DEBUG("Lq: (uH) " + String(Lq*1e6, 7));
     }
 
-    float Maxwell::estimate_bemf_angle() {
-        // Extract elec_rotations, and prev_bemf angle from absolute_bemf_angle (so absolute_bemf_angle can be used as update mechanism)
-        bemf_full_elec_rotations = floor(absolute_bemf_angle * config.pole_pairs / _2PI);
-        prev_bemf_angle = absolute_bemf_angle * config.pole_pairs - bemf_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
+    float Maxwell::estimate_flux_angle(uint32_t current_time_us) {
+        float Ts = (current_time_us - prev_flux_estimator_micros) * 1e-6;
+        if (Ts > 0e-6) {
+            // Extract elec_rotations, and prev_bemf angle from absolute_bemf_angle (so absolute_bemf_angle can be used as update mechanism)
+            flux_full_elec_rotations = floor(absolute_flux_angle * config.pole_pairs / _2PI);
+            prev_flux_angle = absolute_flux_angle * config.pole_pairs - flux_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
+            // prev_flux_angle = raw_flux_angle;
+            float omega_c = 100.0;
 
-        // prev_bemf_angle = raw_bemf_angle;
-        // estimate bemf based on applied voltage and current readings
-        ab_struct bemf = {foc.command_ab.alpha - Rs*foc.ab_meas.alpha,
-                           foc.command_ab.beta - Rs*foc.ab_meas.beta};
-        // if (max(abs(bemf.alpha), abs(bemf.beta)) < 0.2) { // This could create offset -
-        //     // If the estimated bemf is very small, it's likely just noise - don't update the angle estimate
-        //     return absolute_bemf_angle;
-        // }
-        raw_bemf_angle = atan2(bemf.beta, bemf.alpha) + _PI_2; // Outputs [-PI, PI]
-        raw_bemf_angle = raw_bemf_angle - floor(raw_bemf_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
-        float d_angle = raw_bemf_angle - prev_bemf_angle;
-        if (abs(d_angle) > 0.5f*_2PI) { // wrap around
-            bemf_full_elec_rotations += (d_angle > 0) ? -1 : 1;
+            // Integrate the voltage vector to get flux vector
+            Psi_alpha += (foc.command_ab.alpha - Rs*foc.ab_meas.alpha - omega_c*Psi_alpha) * Ts;
+            Psi_beta  += (foc.command_ab.beta -  Rs*foc.ab_meas.beta  - omega_c*Psi_beta ) * Ts;
+
+            // raw_flux_angle = atan2(Psi_beta, Psi_alpha); // Get the angle of the flux vector
+
+            raw_flux_angle = atan2(Psi_beta - L*foc.ab_meas.beta, Psi_alpha - L*foc.ab_meas.alpha); // Get the angle of the flux vector
+            // raw_flux_angle = raw_flux_angle - floor(raw_flux_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
+
+            float d_angle = raw_flux_angle - prev_flux_angle;
+            if (abs(d_angle) > 0.5f*_2PI) { // wrap around
+                flux_full_elec_rotations += (d_angle > 0) ? -1 : 1;
+            }
+            // absolute_bemf_angle = (bemf_full_mech_rotations * _2PI) + ((bemf_full_elec_rotations * _2PI) + raw_bemf_angle) / config.pole_pairs;
+            absolute_flux_angle = ((_2PI * flux_full_elec_rotations) + raw_flux_angle) / config.pole_pairs;
+            prev_flux_estimator_micros = current_time_us;
+            return absolute_flux_angle;
         }
-        // absolute_bemf_angle = (bemf_full_mech_rotations * _2PI) + ((bemf_full_elec_rotations * _2PI) + raw_bemf_angle) / config.pole_pairs;
-        absolute_bemf_angle = ((_2PI * bemf_full_elec_rotations) + raw_bemf_angle) / config.pole_pairs;
-        return absolute_bemf_angle;
+        return absolute_flux_angle;
     }
 
     void Maxwell::update_observer(float angle_meas, uint32_t current_time_us) {
@@ -734,8 +740,8 @@ namespace Maxwell {
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
         float cl_bw = _2PI * 1452;
-        float dq_kp = cl_bw * L;
-        float dq_ki = cl_bw * Rs;
+        float dq_kp = 5;  //cl_bw * L;
+        float dq_ki = 30; //cl_bw * Rs;
 
         telemetry->DEBUG("DQ KP: " + String(dq_kp, 7));
         telemetry->DEBUG("DQ KI: " + String(dq_ki, 7));
@@ -778,7 +784,8 @@ namespace Maxwell {
         float homing_theta = 0.0;
         float angle = 0.0;
         float encoder_angle = 0.0;
-        float use_bemf_threshold = 50.0;
+        float use_flux_thresh_1 = 70.0;
+        float use_flux_thresh_2 = 100.0;
         bool using_bemf_estimate = false;
         uint32_t prev_millis = millis();
         uint32_t prev_micros = micros();
@@ -789,45 +796,39 @@ namespace Maxwell {
             float reference = command_source->read();             // Read command from command source
             reference = foc.input_lpf->update(reference, current_time_us);  // Filter command
             reference = motor_direction * reference; // Apply motor direction from config
+            //float Ts = (current_time_us - prev_micros) * 1e-6;
 
 
-            if (abs(velocity) < use_bemf_threshold) {
-                // Use encoder as angle estimate
+            // estimate_flux_angle(current_time_us);
+
+
+            if (abs(velocity) < use_flux_thresh_1) {
                 encoder->update();
                 angle = encoder->get_angle();
-
-                using_bemf_estimate = false;
-
-
-                absolute_bemf_angle = angle; // Update bemf estimator
-                estimate_bemf_angle();
-
-                // angle = encoder_angle;
+                // Use encoder as angle estimate
+                absolute_flux_angle = angle; // Update bemf estimator
+                Psi_alpha = L * foc.ab_meas.alpha + flux_linkage * cos(angle * config.pole_pairs);
+                Psi_beta  = L * foc.ab_meas.beta  + flux_linkage * sin(angle * config.pole_pairs);
             }
-            // else if (abs(velocity) < use_bemf_threshold and using_bemf_estimate == true) {
-            //     // At very low speeds, the encoder can be very noisy - use a blend of encoder and bemf estimate
-            //     // Update the encoder angle
-            //     encoder->absolute_angle = absolute_bemf_angle; // Encoder will decode this
-            //     encoder->update();
-            //     angle = encoder->get_angle();
-            //     using_bemf_estimate = false;
-            //     absolute_bemf_angle = angle; // Update bemf estimator
-            // }
-
+            else if (use_flux_thresh_1 <= abs(velocity) && abs(velocity) < use_flux_thresh_2) {
+                encoder->update();
+                // At mid speeds, use a linear blend of encoder and bemf estimate
+                float alpha = (abs(velocity) - use_flux_thresh_1) / (use_flux_thresh_2 - use_flux_thresh_1);
+                estimate_flux_angle(current_time_us);
+                angle = (1-alpha)*encoder->absolute_angle + alpha*absolute_flux_angle;
+            }
             else {
                 // At higher speeds, use bemf estimate
-                using_bemf_estimate = true;
-                angle = estimate_bemf_angle();
-                encoder->absolute_angle = absolute_bemf_angle; // Keep encoder count up to date
+                angle = estimate_flux_angle(current_time_us);
+                encoder->absolute_angle = absolute_flux_angle; // Keep encoder count up to date
             }
 
             // Update the observer for velocity prediction
             update_observer(angle, current_time_us);
-            // prev_velocity = velocity;
-
+            prev_velocity = velocity;
 
             // velocity = encoder->get_velocity();
-            // velocity = foc.velocity_lpf->update(velocity, current_time_us);
+            // velocity = foc.velocity_lpf->updateve(locity, current_time_us);
 
             // switch control mode to generate correct torque reference for the torque control loop
             switch (config.control_mode) {
@@ -925,7 +926,7 @@ namespace Maxwell {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
                 // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->absolute_angle- absolute_bemf_angle}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->absolute_angle, absolute_flux_angle}});
 
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
@@ -933,7 +934,13 @@ namespace Maxwell {
                                                                                 static_cast<float>(foc.phase_current_meas.current_c)}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND_VOLTAGES, {static_cast<float>(foc.command_dq.d),
                                                                                         static_cast<float>(foc.command_dq.q)}});
-
+                // telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS, {static_cast<float>(foc.ab_meas.alpha),
+                //                                                                     static_cast<float>(foc.ab_meas.beta),
+                //                                                                         static_cast<float>(foc.command_ab.alpha),
+                //                                                                             static_cast<float>(foc.command_ab.beta)}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS,
+                        {static_cast<float>(Psi_alpha),
+                            static_cast<float>(Psi_beta)}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
                                                                                                 static_cast<float>(foc.dq_meas.q),
                                                                                                     0.0,
@@ -949,6 +956,8 @@ namespace Maxwell {
                 //                             static_cast<String>(encoder->errors.magnitude));
                 prev_millis = current_time_ms;
             }
+            prev_micros = current_time_us;
+
         } // End of master control loop
     }
 
