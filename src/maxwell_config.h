@@ -93,6 +93,11 @@ enum MOTOR_DIRECTION {
     MOTOR_CCW = -1
 };
 
+enum OBSERVER_TYPE {
+    GRIFFO_OBSERVER,
+    ORTEGA_OBSERVER
+};
+
 struct motorTypeSchema {
 
 

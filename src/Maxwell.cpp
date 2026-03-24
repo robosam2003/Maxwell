@@ -582,31 +582,62 @@ namespace Maxwell {
     }
 
     float Maxwell::estimate_flux_angle(uint32_t current_time_us) {
+        OBSERVER_TYPE observer = OBSERVER_TYPE::ORTEGA_OBSERVER;
         float Ts = (current_time_us - prev_flux_estimator_micros) * 1e-6;
-        if (Ts > 0e-6) {
-            // Extract elec_rotations, and prev_bemf angle from absolute_bemf_angle (so absolute_bemf_angle can be used as update mechanism)
-            flux_full_elec_rotations = floor(absolute_flux_angle * config.pole_pairs / _2PI);
-            prev_flux_angle = absolute_flux_angle * config.pole_pairs - flux_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
-            // prev_flux_angle = raw_flux_angle;
-            float omega_c = 100.0;
+        if (Ts > 10e-6) {
+            switch (observer) {
+                case OBSERVER_TYPE::ORTEGA_OBSERVER: {
+                    float gamma = 100;
+                    float L_ia = L * foc.ab_meas.alpha;
+                    float L_ib = L * foc.ab_meas.beta;
 
-            // Integrate the voltage vector to get flux vector
-            Psi_alpha += (foc.command_ab.alpha - Rs*foc.ab_meas.alpha - omega_c*Psi_alpha) * Ts;
-            Psi_beta  += (foc.command_ab.beta -  Rs*foc.ab_meas.beta  - omega_c*Psi_beta ) * Ts;
+                    float err = sqrt(flux_linkage) - (sqrt(Psi_alpha - L_ia) + sqrt(Psi_beta - L_ib));
 
-            // raw_flux_angle = atan2(Psi_beta, Psi_alpha); // Get the angle of the flux vector
+                    if (err > 0.0) err = 0.0;
 
-            raw_flux_angle = atan2(Psi_beta - L*foc.ab_meas.beta, Psi_alpha - L*foc.ab_meas.alpha); // Get the angle of the flux vector
-            // raw_flux_angle = raw_flux_angle - floor(raw_flux_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
+                    float p_a_dot =  foc.command_ab.alpha - Rs*foc.ab_meas.alpha + (gamma/2)*(Psi_alpha - L_ia)*err;
+                    float p_b_dot =  foc.command_ab.beta  - Rs*foc.ab_meas.beta  + (gamma/2)*(Psi_beta  - L_ib)*err;
+                    Psi_alpha += p_a_dot * Ts;
+                    Psi_beta  += p_b_dot * Ts;
 
-            float d_angle = raw_flux_angle - prev_flux_angle;
-            if (abs(d_angle) > 0.5f*_2PI) { // wrap around
-                flux_full_elec_rotations += (d_angle > 0) ? -1 : 1;
+                    raw_flux_angle = atan2(Psi_beta, Psi_alpha); // Get the angle of the flux vector
+                    raw_flux_angle = raw_flux_angle - floor(raw_flux_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
+
+                    float d_angle = raw_flux_angle - prev_flux_angle;
+                    if (abs(d_angle) > 0.5f*_2PI) { // wrap around
+                        flux_full_elec_rotations += (d_angle > 0) ? -1 : 1;
+                    }
+                    // absolute_bemf_angle = (bemf_full_mech_rotations * _2PI) + ((bemf_full_elec_rotations * _2PI) + raw_bemf_angle) / config.pole_pairs;
+                    absolute_flux_angle = ((_2PI * flux_full_elec_rotations) + raw_flux_angle) / config.pole_pairs;
+                    prev_flux_estimator_micros = current_time_us;
+                    break;
+                }
+                case OBSERVER_TYPE::GRIFFO_OBSERVER: {
+                    // Extract elec_rotations, and prev_bemf angle from absolute_bemf_angle (so absolute_bemf_angle can be used as update mechanism)
+                    flux_full_elec_rotations = floor(absolute_flux_angle * config.pole_pairs / _2PI);
+                    prev_flux_angle = absolute_flux_angle * config.pole_pairs - flux_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
+                    // prev_flux_angle = raw_flux_angle;
+                    float omega_c = 100.0;
+
+                    // Integrate the voltage vector to get flux vector
+                    Psi_alpha += (foc.command_ab.alpha - Rs*foc.ab_meas.alpha - omega_c*Psi_alpha) * Ts;
+                    Psi_beta  += (foc.command_ab.beta -  Rs*foc.ab_meas.beta  - omega_c*Psi_beta ) * Ts;
+
+                    // raw_flux_angle = atan2(Psi_beta, Psi_alpha); // Get the angle of the flux vector
+
+                    raw_flux_angle = atan2(Psi_beta - L*foc.ab_meas.beta, Psi_alpha - L*foc.ab_meas.alpha); // Get the angle of the flux vector
+                    raw_flux_angle = raw_flux_angle - floor(raw_flux_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
+
+                    float d_angle = raw_flux_angle - prev_flux_angle;
+                    if (abs(d_angle) > 0.5f*_2PI) { // wrap around
+                        flux_full_elec_rotations += (d_angle > 0) ? -1 : 1;
+                    }
+                    // absolute_bemf_angle = (bemf_full_mech_rotations * _2PI) + ((bemf_full_elec_rotations * _2PI) + raw_bemf_angle) / config.pole_pairs;
+                    absolute_flux_angle = ((_2PI * flux_full_elec_rotations) + raw_flux_angle) / config.pole_pairs;
+                    prev_flux_estimator_micros = current_time_us;
+                    break;
+                }
             }
-            // absolute_bemf_angle = (bemf_full_mech_rotations * _2PI) + ((bemf_full_elec_rotations * _2PI) + raw_bemf_angle) / config.pole_pairs;
-            absolute_flux_angle = ((_2PI * flux_full_elec_rotations) + raw_flux_angle) / config.pole_pairs;
-            prev_flux_estimator_micros = current_time_us;
-            return absolute_flux_angle;
         }
         return absolute_flux_angle;
     }
@@ -784,8 +815,8 @@ namespace Maxwell {
         float homing_theta = 0.0;
         float angle = 0.0;
         float encoder_angle = 0.0;
-        float use_flux_thresh_1 = 70.0;
-        float use_flux_thresh_2 = 100.0;
+        float use_flux_thresh_1 = 50.0;
+        float use_flux_thresh_2 = 80.0;
         bool using_bemf_estimate = false;
         uint32_t prev_millis = millis();
         uint32_t prev_micros = micros();
@@ -801,27 +832,28 @@ namespace Maxwell {
 
             // estimate_flux_angle(current_time_us);
 
-
-            if (abs(velocity) < use_flux_thresh_1) {
-                encoder->update();
-                angle = encoder->get_angle();
-                // Use encoder as angle estimate
-                absolute_flux_angle = angle; // Update bemf estimator
-                Psi_alpha = L * foc.ab_meas.alpha + flux_linkage * cos(angle * config.pole_pairs);
-                Psi_beta  = L * foc.ab_meas.beta  + flux_linkage * sin(angle * config.pole_pairs);
-            }
-            else if (use_flux_thresh_1 <= abs(velocity) && abs(velocity) < use_flux_thresh_2) {
-                encoder->update();
-                // At mid speeds, use a linear blend of encoder and bemf estimate
-                float alpha = (abs(velocity) - use_flux_thresh_1) / (use_flux_thresh_2 - use_flux_thresh_1);
-                estimate_flux_angle(current_time_us);
-                angle = (1-alpha)*encoder->absolute_angle + alpha*absolute_flux_angle;
-            }
-            else {
-                // At higher speeds, use bemf estimate
-                angle = estimate_flux_angle(current_time_us);
-                encoder->absolute_angle = absolute_flux_angle; // Keep encoder count up to date
-            }
+            encoder->update();
+            angle = encoder->get_angle();
+            estimate_flux_angle(current_time_us);
+            // if (abs(velocity) < use_flux_thresh_1) {
+            //
+            //     // Use encoder as angle estimate
+            //     absolute_flux_angle = angle; // Update bemf estimator
+            //     Psi_alpha = L * foc.ab_meas.alpha + flux_linkage * cos(angle * config.pole_pairs);
+            //     Psi_beta  = L * foc.ab_meas.beta  + flux_linkage * sin(angle * config.pole_pairs);
+            // }
+            // else if (use_flux_thresh_1 <= abs(velocity) && abs(velocity) < use_flux_thresh_2) {
+            //     encoder->update();
+            //     // At mid speeds, use a linear blend of encoder and bemf estimate
+            //     float alpha = (abs(velocity) - use_flux_thresh_1) / (use_flux_thresh_2 - use_flux_thresh_1);
+            //     estimate_flux_angle(current_time_us);
+            //     angle = (1-alpha)*encoder->absolute_angle + alpha*absolute_flux_angle;
+            // }
+            // else {
+            //     // At higher speeds, use bemf estimate
+            //     angle = estimate_flux_angle(current_time_us);
+            //     encoder->absolute_angle = absolute_flux_angle; // Keep encoder count up to date
+            // }
 
             // Update the observer for velocity prediction
             update_observer(angle, current_time_us);
