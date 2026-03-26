@@ -23,25 +23,6 @@ namespace DRV8323 {
         _CS = CS;
         _spi = spi;
 
-        pinMode(pin_a, OUTPUT);
-        pinMode(pin_b, OUTPUT);
-        pinMode(pin_c, OUTPUT);
-
-
-
-
-        // TODO: Deal with this properly - this is a quick hack
-        pinMode(DRV8323_LO_A_PIN, OUTPUT);
-        pinMode(DRV8323_LO_B_PIN, OUTPUT);
-        pinMode(DRV8323_LO_C_PIN, OUTPUT);
-        // // Tie all low side pins HIGH to avoid hi-z state
-        // digitalWrite(DRV8323_LO_A_PIN, HIGH);
-        // digitalWrite(DRV8323_LO_B_PIN, HIGH);
-        // digitalWrite(DRV8323_LO_C_PIN, HIGH);
-
-        gate_en_pin = gate_enable_pin;
-        pinMode(gate_en_pin, OUTPUT);
-
         // Set up SPI settings - SPI MODE 1 because data is captured on the falling edge of the clock
         // and propagated on the rising edge - https://en.wikipedia.org/wiki/Serial_Peripheral_Interface
         _settings = SPISettings(spiFreq, MSBFIRST, SPI_MODE1);
@@ -49,6 +30,18 @@ namespace DRV8323 {
         // Set up CS pin
         pinMode(_CS, OUTPUT);
         digitalWrite(_CS, HIGH);
+
+        pinMode(pin_a, OUTPUT);
+        pinMode(pin_b, OUTPUT);
+        pinMode(pin_c, OUTPUT);
+
+        // TODO: Deal with this properly - this is a quick hack
+        pinMode(DRV8323_LO_A_PIN, OUTPUT);
+        pinMode(DRV8323_LO_B_PIN, OUTPUT);
+        pinMode(DRV8323_LO_C_PIN, OUTPUT);
+
+        gate_en_pin = gate_enable_pin;
+        pinMode(gate_en_pin, OUTPUT);
 
         // Begin the SPI bus.
         _spi.begin();

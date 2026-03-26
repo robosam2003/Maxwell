@@ -156,6 +156,10 @@ static float sin_table[512] = {0.0000000000000000, 0.0030739605733556, 0.0061478
 __attribute__((weak)) float _sin(float angle) {
     angle = angle - floor(angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
 
+    // if (isnan(angle)) {
+    //     return 0.0f;
+    // }
+
     int i = static_cast<int>((angle / _2PI)*512*4);
     i %= 2048;
     float ret = 0;

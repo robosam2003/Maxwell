@@ -1,56 +1,70 @@
 //
-// Created by robos on 10/07/2024.
+// Created by robos on 20/12/2025.
 //
-#include "Arduino.h"
-#include <SPI.h>
-#include "AS5047P_constants.h"
-#include "PositionSensor.h"
 
 #ifndef MAXWELL_AS5047P_H
 #define MAXWELL_AS5047P_H
 
-namespace AS5047P {
+#include "PositionSensor.h"
+#include <SPI.h>
+#include "../../include/config.h"
+#include "HardwareTimer.h"
+#include "pid_controller.h"
 
-    class AS5047P : public PositionSensor {
-    public:
 
-        byte _CS;
-        byte READ_BYTE = 0b01000000;
-        byte WRITE_BYTE = 0b00000000;
-        SPIClass _spi;
-        SPISettings _settings;
-        DIRECTION _direction;
-        float prev_raw_angle = 0.0; // Previous relative angle (0 to 2*pi)
-        float prev_absolute_angle = 0.0;
-        long full_rotations = 0; // Number of full rotations
-        float absolute_angle = 0.0; // Absolute angle factoring in full rotations (radians)
+class AS5047P : public PositionSensor {
+private:
+    uint8_t _CS;
+    SPIClass _spi;
+    SPISettings _settings;
 
-        float offset = 0.0; // Offset angle (radians)
-
-        uint32_t prev_time_us = 0; // Timestamp of the previous angle reading
-        float velocity = 0.0; // Angular velocity (radians/s)
-        bool comp = true;
-
-        AS5047P(byte CS, SPIClass& spi, uint32_t spiFreq);
-
-        uint16_t read_reg(REGISTER regAddress);  // SPI read
-
-        void write_reg(REGISTER regAddress, uint16_t data);  // SPI write
-
-        void update();
-
-        float get_angle();
-
-        float get_velocity();
-
-        void set_offset(float angle);
-
-        uint16_t get_mag_strength();
-
-        void set_direction(DIRECTION direction);
-
+    const uint8_t READ_BYTE = 0x40;
+    const uint8_t WRITE_BYTE = 0x00;
+    const float MAX_DELTA_ANGLE = 0.5; // Maximum allowed change in angle between updates (radians) - used for error detection
+public:
+    enum REGISTER {
+        NOOP        = 0x0000,
+        ERRFL       = 0x0001,
+        PROG        = 0x0003,
+        DIAAGC      = 0x3FFC,
+        MAG         = 0x3FFD,
+        ANGLEUNCOMP = 0x3FFE,
+        ANGLECOM    = 0x3FFF
+    };
+    enum ERROR: uint8_t {
+        NO_ERROR = 0x00,
+        FRAMING_ERROR = 0x1,
+        COMMAND_INVALID = 0x2,
+        PARITY_ERROR = 0x3,
     };
 
-} // namespace AS5047P
+    int prev_time_counts = 0; // Timestamp of the previous angle reading
+    uint32_t prev_micros = 0; // Timestamp of the previous angle reading in microseconds
+    HardwareTimer* timer;
+    float integral_observer = 0; // Integral term for the tracking observer
+
+    uint16_t read_reg(REGISTER regAddress);
+    void write_reg(REGISTER regAddress, uint16_t data);
+    float K = 30.0; // Gain for the tracking observer - this can be tuned based on the expected noise and dynamics of the system
+
+
+    PIDController angle_observer = PIDController(50.0,
+                                                 50.0,
+                                                0,
+                                                0,
+                                                100000,
+                                                100000); // PID controller for the tracking observer
+
+    AS5047P(byte CS, SPIClass& spi, uint32_t spiFreq);
+
+    void update() override;
+    uint16_t read_angle_reg();
+    float get_angle() override; // in radians
+    float get_velocity() override; // in radians per second
+    float get_velocity_estimate(float angle_meas, float Ts); // Tracking observer
+    ERROR get_error();
+    void set_offset(float angle) override;
+};
+
 
 #endif //MAXWELL_AS5047P_H

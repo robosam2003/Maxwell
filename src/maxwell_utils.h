@@ -149,6 +149,9 @@ inline float norm(float* arr, int size) { // norm of a vector
 
 
 
+#define SQ(x)       ((x)*(x))
+
+
 
 
 

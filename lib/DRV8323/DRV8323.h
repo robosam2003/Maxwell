@@ -48,8 +48,6 @@ public:
 
     void enable(bool enable);
 
-    void setup_pwm();
-
     // Helper functions
     uint16_t read_reg(REGISTER regAddress);  // SPI read
     void write_reg(REGISTER regAddress, uint16_t data);  // SPI write

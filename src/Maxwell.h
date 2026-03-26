@@ -11,6 +11,8 @@
 #include "PositionSensor.h"
 #include "AS5048.h"
 #include "AS5600.h"
+#include "AS5047P.h"
+
 
 // #include "FreeRTOS.h"
 // #include "task.h"
@@ -35,10 +37,10 @@ namespace Maxwell {
             COMMAND_SOURCE::PWM,
             TELEMETRY_TARGET::TELEMETRY_USB,
             MOTOR_TYPE::BLDC,
-            CONTROL_MODE::VELOCITY,
+            CONTROL_MODE::POSITION,
             SENSOR_TYPE::MAGNETIC,
             TORQUE_CONTROL_MODE::CURRENT,
-            SENSOR_LOCATION::INTERNAL,
+            SENSOR_LOCATION::EXTERNAL_PORT,
             POLE_PAIRS_6374,
             0.0,
             {2.0, 0, 0, limits.max_current, 1},
@@ -47,7 +49,7 @@ namespace Maxwell {
             {20, 0, 0, limits.max_velocity, limits.max_velocity},
             {true, 2.0},
             {true, 2.0},
-            {true, 10.0},
+            {false, 1000.0},
             {true, 10.0}
         };
     public:
@@ -68,20 +70,20 @@ namespace Maxwell {
         maxwell_config config;
         test_config t_config;
 
-        bool pos_homed = false;
+        bool pos_homed = true;
         float homed_position_offset = 0.0;
         FOC foc;
         float input_voltage = 24.0;
         limits_struct limits = { // Absorb into config struct?
-            .max_voltage = 23.0,
-            .max_current = 10.0,
+            .max_voltage = 12.0,
+            .max_current = 2.0,
             .align_voltage = 1.5,
             .max_velocity = 300.0, // in radians per second
             .max_position = _2PI * 70/2 // 50mm stroke, with 2mm lead
         };
         // Motor params
         float kv_rating = 330;
-        float flux_linkage;
+        float flux_linkage = (1/kv_rating) * 60 / (2 * PI); // use kv_rating
         float Rs = 90e-3;
         float L  = 222e-6; // Average of Ld and Lq
         float Ld = 186e-6;
@@ -89,24 +91,25 @@ namespace Maxwell {
 
         float prev_velocity = 0.0;
         float velocity = 0.0;
+        float deriv_velocity = 0.0;
         float theta = 0.0;
         float theta_est = 0.0;
         float integral_observer = 0.0;
         uint32_t prev_observer_micros = 0;
 
-        int flux_full_elec_rotations = 0;
+        int64_t flux_full_elec_rotations = 0;
         int bemf_full_mech_rotations = 0;
         float prev_flux_angle = 0.0;
         float raw_flux_angle = 0.0;
         float absolute_flux_angle = 0.0;
         float Psi_alpha = 0.0;
-        float Psi_beta = 0.0;
+        float Psi_beta  = 0.0;
         uint32_t prev_flux_estimator_micros = micros();
 
 
 
 
-        MOTOR_DIRECTION motor_direction = MOTOR_DIRECTION::CCW;
+        MOTOR_DIRECTION motor_direction = MOTOR_DIRECTION::CW;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
         // float align_voltage = 2; // V

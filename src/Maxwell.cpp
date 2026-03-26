@@ -8,7 +8,6 @@
 #include <Wire.h>
 #include <FreeRTOS/Source/include/FreeRTOS.h>
 
-#include "AS5047P.h"
 #include "FreeRTOS.h"
 #include "FreeRTOS/Source/include/FreeRTOS.h"
 
@@ -20,6 +19,11 @@ namespace Maxwell {
     Maxwell::Maxwell() {
         SPIClass SPI_1(PA7, PA6, PA5); // MOSI, MISO, SCK
         SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
+
+        // *ALL* CS pins on a given bus must be pulled high before we try to communicate anything
+        pinMode(AS5048A_CS_PIN, OUTPUT);
+        digitalWrite(AS5048A_CS_PIN, HIGH); // Ensure the CS pin is high
+
         driver = new DRV8323::DRV8323(
             DRV8323_CS_PIN,
             SPI_1,
@@ -31,19 +35,39 @@ namespace Maxwell {
             DRV8323_GATE_EN_PIN);
         driver->default_configuration();
 
+        // For some, bizzare, unknown reason, the internal encoder must be initialised also
+
+
         // TODO: Make the choice between internal and external encoder a config option
-        if (config.sensor_location == SENSOR_LOCATION::INTERNAL) {
-            encoder = new AS5048( // Internal encoder
-                AS5048A_CS_PIN,
-                SPI_1,
-                1000000); // 1 MHz SPI frequency
-        }
-        else {
-            encoder = new AS5048 ( // External encoder
+        // if (config.sensor_location == SENSOR_LOCATION::INTERNAL) {
+
+        // }
+        // else {
+        //     encoder = new AS5048 ( // External encoder
+        //         EXTERNAL_ENCODER_CS_PIN,
+        //         SPI_2,
+        //         10000); // 1 MHz SPI frequency
+        // }
+        // encoder = new AS5048 ( // External encoder
+        //         EXTERNAL_ENCODER_CS_PIN,
+        //         SPI_2,
+        //         10000000); // 1 MHz SPI frequency
+        // encoder = new AS5048( // Internal encoder
+        //         AS5048A_CS_PIN,
+        //         SPI_1,
+        //         1000000); // 1 MHz SPI frequency
+                // encoder = new AS5048( // Internal encoder
+        //         AS5048A_CS_PIN,
+        //         SPI_1,
+        //         1000000); // 1 MHz SPI frequency
+
+
+        encoder = new AS5047P ( // External encoder
                 EXTERNAL_ENCODER_CS_PIN,
                 SPI_2,
-                1000000); // 1 MHz SPI frequency
-        }
+                1000000); // 10 MHz SPI frequency
+
+
         // encoder = new AS5048(AS5048::INT); // DMA Mode
 
         // External encoder
@@ -133,11 +157,11 @@ namespace Maxwell {
         telemetry->DEBUG("Maxwell Setup complete");
 
         // Let velocity estimate stabilise before starting control loop
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0; i < 500; i++) {
             encoder->update();
             update_observer(encoder->get_angle(), micros());
             // telemetry->DEBUG("Reading: " + String(encoder->get_angle()));
-            delay(10);
+            delay(1);
         }
     }
 
@@ -386,7 +410,7 @@ namespace Maxwell {
 
         float average_diff = 0;
         float theta = 0;
-        float theta_inc = 0.005;
+        float theta_inc = 0.0005;
         int theta_inc_len = int(_2PI / theta_inc);
 
         for (long i=0; i<theta_inc_len; i++) {
@@ -551,19 +575,22 @@ namespace Maxwell {
         float q_currs[buf_size];
         float vels[buf_size];
 
-        for (int i=0; i<200; i++) {
+        for (int i=0; i<500; i++) {
             set_phase_voltages({v_d, v_q});
+            encoder->update();
+            update_observer(encoder->get_angle(), micros());
             delay(1);
         }
         // delay(200); // Allow values to settle
         for (int i=0; i<buf_size; i++) {
             set_phase_voltages({v_d, v_q});
-            encoder->update();
-            vels[i] = encoder->get_velocity(); // mechanical velocity in rads/s
+            float angle = encoder->get_angle();
+            update_observer(angle, micros());
+            vels[i] = velocity;
             adc->read();
             PhaseCurrents c = adc->get_phase_currents();
             ab_struct ab = clarke_transform(c);
-            dq_struct dq = park_transform(ab, encoder->get_angle());
+            dq_struct dq = park_transform(ab, angle);
             // Store d and q axis currents for later processing
             d_currs[i] = dq.d;
             q_currs[i] = dq.q;
@@ -582,25 +609,38 @@ namespace Maxwell {
     }
 
     float Maxwell::estimate_flux_angle(uint32_t current_time_us) {
-        OBSERVER_TYPE observer = OBSERVER_TYPE::ORTEGA_OBSERVER;
+        OBSERVER_TYPE observer = OBSERVER_TYPE::GRIFFO_OBSERVER;
         float Ts = (current_time_us - prev_flux_estimator_micros) * 1e-6;
-        if (Ts > 10e-6) {
+        if (Ts > 1e-6) {
             switch (observer) {
                 case OBSERVER_TYPE::ORTEGA_OBSERVER: {
-                    float gamma = 100;
+                    flux_full_elec_rotations = floor(absolute_flux_angle * config.pole_pairs / _2PI);
+                    prev_flux_angle = absolute_flux_angle * config.pole_pairs - flux_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
+                    // High omega_c at low speed to stop drift, low at high speed for phase accuracy
+                    float omega_c = 50.0f;
+
+                    float gamma = 100.0;
+                    if (velocity > 25.0) {
+                        gamma = velocity * 4.0f;
+                        gamma = constrain(gamma, 100.0, 2000.0);
+                    }
                     float L_ia = L * foc.ab_meas.alpha;
                     float L_ib = L * foc.ab_meas.beta;
 
-                    float err = sqrt(flux_linkage) - (sqrt(Psi_alpha - L_ia) + sqrt(Psi_beta - L_ib));
+                    float err = SQ(flux_linkage) - (SQ(Psi_alpha - L_ia) + SQ(Psi_beta - L_ib));
 
                     if (err > 0.0) err = 0.0;
 
-                    float p_a_dot =  foc.command_ab.alpha - Rs*foc.ab_meas.alpha + (gamma/2)*(Psi_alpha - L_ia)*err;
-                    float p_b_dot =  foc.command_ab.beta  - Rs*foc.ab_meas.beta  + (gamma/2)*(Psi_beta  - L_ib)*err;
-                    Psi_alpha += p_a_dot * Ts;
-                    Psi_beta  += p_b_dot * Ts;
+                    float p_a_dot =  (foc.command_ab.alpha - Rs*foc.ab_meas.alpha) + (gamma/2)*(Psi_alpha - L_ia)*err;
+                    float p_b_dot =  (foc.command_ab.beta  - Rs*foc.ab_meas.beta ) + (gamma/2)*(Psi_beta  - L_ib)*err;
 
-                    raw_flux_angle = atan2(Psi_beta, Psi_alpha); // Get the angle of the flux vector
+                    Psi_alpha += (p_a_dot - omega_c * Psi_alpha) * Ts;
+                    Psi_beta  += (p_b_dot - omega_c * Psi_beta ) * Ts;
+
+                    raw_flux_angle = atan2(Psi_beta, Psi_alpha);  // Get the angle of the flux vector
+                    // if (isnan(raw_flux_angle) | isinf(raw_flux_angle)) { // If the angle is not a number (or inf), use the previous angle
+                    //     raw_flux_angle = prev_flux_angle;
+                    // }
                     raw_flux_angle = raw_flux_angle - floor(raw_flux_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
 
                     float d_angle = raw_flux_angle - prev_flux_angle;
@@ -617,11 +657,12 @@ namespace Maxwell {
                     flux_full_elec_rotations = floor(absolute_flux_angle * config.pole_pairs / _2PI);
                     prev_flux_angle = absolute_flux_angle * config.pole_pairs - flux_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
                     // prev_flux_angle = raw_flux_angle;
-                    float omega_c = 100.0;
+                    float omega_c = 50.0;
+                    float observer_gain = 20.0;
 
                     // Integrate the voltage vector to get flux vector
-                    Psi_alpha += (foc.command_ab.alpha - Rs*foc.ab_meas.alpha - omega_c*Psi_alpha) * Ts;
-                    Psi_beta  += (foc.command_ab.beta -  Rs*foc.ab_meas.beta  - omega_c*Psi_beta ) * Ts;
+                    Psi_alpha += (foc.command_ab.alpha - Rs*foc.ab_meas.alpha - omega_c*Psi_alpha) * Ts * observer_gain;
+                    Psi_beta  += (foc.command_ab.beta -  Rs*foc.ab_meas.beta  - omega_c*Psi_beta ) * Ts * observer_gain;
 
                     // raw_flux_angle = atan2(Psi_beta, Psi_alpha); // Get the angle of the flux vector
 
@@ -651,7 +692,7 @@ namespace Maxwell {
 
             // Lightweight PID:
             float Kp = 100.0;
-            float Ki = 300.0;
+            float Ki = 1000.0;
             float error = angle_meas - theta_est;
 
             integral_observer += error * Ki * Ts;
@@ -676,7 +717,8 @@ namespace Maxwell {
         find_resistance(2.5);
         // find_resistance(4.0);
         delay(500);
-        find_inductance(1.0, 1.5); // Freezes up after this?  ???
+        find_inductance(1.5, 1.5);
+        delay(100);
 
 
     }
@@ -741,6 +783,7 @@ namespace Maxwell {
             }
             default: break;
         }
+        delay(10);
 
     }
 
@@ -765,6 +808,7 @@ namespace Maxwell {
     void Maxwell::bldc_control() {
         // Initialise 3x PWM generation on the STM32
         init_pwm_3x();
+        pinMode(DRV8323_MOTOR_FAULT_PIN, INPUT_PULLUP);
 
         // Setup components for bldc_control
         driver->enable(true); // Enable driver in 3x mode
@@ -772,7 +816,7 @@ namespace Maxwell {
 
         float cl_bw = _2PI * 1452;
         float dq_kp = 5;  //cl_bw * L;
-        float dq_ki = 30; //cl_bw * Rs;
+        float dq_ki = 100; //cl_bw * Rs;
 
         telemetry->DEBUG("DQ KP: " + String(dq_kp, 7));
         telemetry->DEBUG("DQ KI: " + String(dq_ki, 7));
@@ -795,15 +839,15 @@ namespace Maxwell {
 
         PIDController velocity_pid =
             PIDController(  0.01,
-                            2.0,
+                            0.5,
                             0.0,
                             0.0,
                             limits.max_current,
                             limits.max_current);
 
         PIDController position_pid =
-            PIDController(  10,
-                            0.1,
+            PIDController(  20,
+                            0,
                             0.0,
                             0.0,
                             limits.max_velocity,
@@ -813,11 +857,16 @@ namespace Maxwell {
         float vel_ref = 0.0;
         float torque_reference = 0.0;
         float homing_theta = 0.0;
+        float prev_angle = 0.0;
         float angle = 0.0;
         float encoder_angle = 0.0;
         float use_flux_thresh_1 = 50.0;
-        float use_flux_thresh_2 = 80.0;
+        float use_flux_thresh_2 = 100.0;
+        float v_d_ff = 0.0;
+        float v_q_ff = 0.0;
+        float v_d_ff_bemf = 0.0;
         bool using_bemf_estimate = false;
+        float max_abs_angle = 0.0;
         uint32_t prev_millis = millis();
         uint32_t prev_micros = micros();
         while (true) { // Master control loop
@@ -829,18 +878,27 @@ namespace Maxwell {
             reference = motor_direction * reference; // Apply motor direction from config
             //float Ts = (current_time_us - prev_micros) * 1e-6;
 
+            // Pure encoder
+            encoder->update();
+            angle = encoder->get_angle();
+            update_observer(angle, current_time_us);
+            velocity = foc.velocity_lpf->update(velocity, current_time_us);
 
             // estimate_flux_angle(current_time_us);
 
-            encoder->update();
-            angle = encoder->get_angle();
-            estimate_flux_angle(current_time_us);
+            // // Pure encoder control
+            // encoder->update();
+            // angle = encoder->get_angle();
+
+            // estimate_flux_angle(current_time_us);
+            // max_abs_angle = max(max_abs_angle, abs(angle));
+            // Blended transition to higher speed
             // if (abs(velocity) < use_flux_thresh_1) {
-            //
+            //     encoder->update();
+            //     angle = encoder->get_angle();
             //     // Use encoder as angle estimate
             //     absolute_flux_angle = angle; // Update bemf estimator
-            //     Psi_alpha = L * foc.ab_meas.alpha + flux_linkage * cos(angle * config.pole_pairs);
-            //     Psi_beta  = L * foc.ab_meas.beta  + flux_linkage * sin(angle * config.pole_pairs);
+            //     estimate_flux_angle(current_time_us);
             // }
             // else if (use_flux_thresh_1 <= abs(velocity) && abs(velocity) < use_flux_thresh_2) {
             //     encoder->update();
@@ -855,12 +913,20 @@ namespace Maxwell {
             //     encoder->absolute_angle = absolute_flux_angle; // Keep encoder count up to date
             // }
 
+            //Sanitise the angle
+            // if (isnan(angle) | isinf(angle)) {
+            //     angle = prev_angle;
+            //     String inf_or_nan = (isnan(angle)) ? "NAN" : "INF";
+            //     telemetry->DEBUG("Angle is " + inf_or_nan + "! Reverting to previous angle: " + String(angle));
+            // }
+            // prev_angle = angle; // Else just use the angle
+
             // Update the observer for velocity prediction
-            update_observer(angle, current_time_us);
-            prev_velocity = velocity;
+            // update_observer(angle, current_time_us);
+            // prev_velocity = velocity;
 
             // velocity = encoder->get_velocity();
-            // velocity = foc.velocity_lpf->updateve(locity, current_time_us);
+            // velocity = foc.velocity_lpf->update(velocity, current_time_us);
 
             // switch control mode to generate correct torque reference for the torque control loop
             switch (config.control_mode) {
@@ -899,6 +965,7 @@ namespace Maxwell {
             switch (config.torque_control_mode) {
                 case (TORQUE_CONTROL_MODE::VOLTAGE): {
                     // TORQUE CONTROL, with TORQUE CONTROL MODE
+
                     float U_q = torque_reference; // In voltage control mode, the torque reference is directly the q-axis voltage
                     set_phase_voltages({0, U_q}, angle*POLE_PAIRS_6374);
                     adc->read();
@@ -920,6 +987,8 @@ namespace Maxwell {
                     float I_q = torque_reference;
                     d_pid.set_setpoint(0.0);
                     q_pid.set_setpoint(I_q);
+
+
 
                     adc->read();
                     // // Measure current and transform
@@ -944,7 +1013,17 @@ namespace Maxwell {
                     foc.command_dq.d = d_pid.update(foc.dq_meas.d);
                     foc.command_dq.q = q_pid.update(foc.dq_meas.q);
                     foc.command_ab = reverse_park_transform(foc.command_dq, angle);
-                    //
+
+                    // calculate decoupling:
+                    float w_e = velocity * config.pole_pairs; // Electrical angular velocity
+                    v_d_ff = -w_e * Lq * foc.dq_meas.q; // D axis feedforward voltage
+                    v_q_ff = w_e * Ld * foc.dq_meas.d;  // Q axis feedforward voltage
+                    v_d_ff_bemf = w_e * flux_linkage; // BEMF decoupling - can add in ??
+                    // Add feedforward
+                    foc.command_dq.d += v_d_ff;
+                    foc.command_dq.q += v_q_ff;
+
+
                     // // Generate voltage command from PID output
                     set_phase_voltages(foc.command_dq, angle*POLE_PAIRS_6374);
 
@@ -954,11 +1033,11 @@ namespace Maxwell {
             }
             uint32_t end_time_us = micros();
             float loop_frequency = 1/((end_time_us - current_time_us)/1000000.0);
-            if (current_time_ms - prev_millis >= 30) {
+            if (current_time_ms - prev_millis >= 50) {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
                 // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {encoder->absolute_angle, absolute_flux_angle}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, encoder->absolute_angle}});
 
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
@@ -970,17 +1049,18 @@ namespace Maxwell {
                 //                                                                     static_cast<float>(foc.ab_meas.beta),
                 //                                                                         static_cast<float>(foc.command_ab.alpha),
                 //                                                                             static_cast<float>(foc.command_ab.beta)}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS,
-                        {static_cast<float>(Psi_alpha),
-                            static_cast<float>(Psi_beta)}});
+                // telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS,
+                //         {static_cast<float>(Psi_alpha),
+                //             static_cast<float>(Psi_beta)}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS, {v_d_ff, v_q_ff, v_d_ff_bemf}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
                                                                                                 static_cast<float>(foc.dq_meas.q),
                                                                                                     0.0,
                                                                                                     torque_reference}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {loop_frequency}});
-                // if (a == "")
-
-                // telemetry->DEBUG(driver->get_fault_status_1_string() + " / " + driver->get_fault_status_2_string());
+                // telemetry->DEBUG(String(angle) + " / " + String(absolute_flux_angle) + " / " + String(encoder->absolute_angle));
+                // telemetry->DEBUG(digitalRead(DRV8323_MOTOR_FAULT_PIN));
+                // telemetry->DEBUG(String(driver->get_fault_status_1_string()) + " / " + String(driver->get_fault_status_2_string()));
                 // telemetry->DEBUG(static_cast<String>(encoder->errors.parity_error_cnt) + " / " +
                 //                         static_cast<String>(encoder->errors.error_flag_cnt) + " / " +
                 //                         static_cast<String>(encoder->errors.error_flag) + "/" +
