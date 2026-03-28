@@ -35,9 +35,6 @@ namespace Maxwell {
             DRV8323_GATE_EN_PIN);
         driver->default_configuration();
 
-        // For some, bizzare, unknown reason, the internal encoder must be initialised also
-
-
         // TODO: Make the choice between internal and external encoder a config option
         // if (config.sensor_location == SENSOR_LOCATION::INTERNAL) {
 
@@ -111,6 +108,7 @@ namespace Maxwell {
         pinMode(DRV8323_LO_B_PIN, OUTPUT);
         pinMode(DRV8323_LO_C_PIN, OUTPUT);
 
+
         driver->enable(true);
         // driver->default_configuration();
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);
@@ -140,6 +138,8 @@ namespace Maxwell {
         // Default config - only if we're not loading from flash
         config = default_config_struct;
         load_control_config();
+
+        // supply_voltage_watchdog(); // Populate the initial supply voltage reading
 
         t_config = config_manager.read_config(); // Try to read the config from flash
         sensor_offset_calibration();
@@ -397,6 +397,12 @@ namespace Maxwell {
     }
 
     void Maxwell::sensor_offset_calibration() {
+        // supply_voltage_watchdog(); // Ensure we have a valid supply voltage reading before starting the calibration
+        // while (!driver_active) {
+        //     telemetry->DEBUG("Insufficient supply voltage: " + String(input_voltage));
+        //     delay(500);
+        //     supply_voltage_watchdog(); // Ensure we have a valid supply voltage reading before starting the calibration
+        // }
         // Initialise 3x PWM generation on the STM32
         init_pwm_3x();
 
@@ -410,7 +416,7 @@ namespace Maxwell {
 
         float average_diff = 0;
         float theta = 0;
-        float theta_inc = 0.0005;
+        float theta_inc = 0.001;
         int theta_inc_len = int(_2PI / theta_inc);
 
         for (long i=0; i<theta_inc_len; i++) {
@@ -532,6 +538,18 @@ namespace Maxwell {
         //     i++;
         // }
         // set_phase_voltages(0, 0, 0);
+    }
+
+    bool Maxwell::supply_voltage_watchdog() {
+        adc->read();
+        input_voltage = adc->get_supply_voltage();
+        if (input_voltage < min_voltage) {
+            driver_active = false;
+        }
+        else {
+            driver_active = true;
+        }
+        return driver_active;
     }
 
     float Maxwell::find_resistance(float voltage) {
@@ -685,7 +703,7 @@ namespace Maxwell {
 
     void Maxwell::update_observer(float angle_meas, uint32_t current_time_us) {
         float Ts = (current_time_us - prev_observer_micros) * 1e-6;
-        if (Ts > 100e-6) { // only update if there's a reasonable amount of time passed.
+        if (Ts > 1e-6) { // only update if there's a reasonable amount of time passed.
             // A tracking observer
             // // This is proportional to 2 times the error
             // float two_error = (_sin(angle_meas) * _cos(theta_est)) - (_cos(angle_meas) * _sin(theta_est));
@@ -698,6 +716,13 @@ namespace Maxwell {
             integral_observer += error * Ki * Ts;
             velocity = Kp * error + integral_observer;
 
+            deriv_velocity = (angle_meas - prev_angle) / Ts;
+            prev_angle = angle_meas;
+
+            deriv_velocity = foc.velocity_lpf->update(deriv_velocity, current_time_us);
+
+            // // Select deriv_velocity
+            // velocity = deriv_velocity;
             // angle_observer.set_setpoint(angle_meas);
             // float omega = angle_observer.update(theta_est);
 
@@ -808,18 +833,18 @@ namespace Maxwell {
     void Maxwell::bldc_control() {
         // Initialise 3x PWM generation on the STM32
         init_pwm_3x();
-        pinMode(DRV8323_MOTOR_FAULT_PIN, INPUT_PULLUP);
 
         // Setup components for bldc_control
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
-        float cl_bw = _2PI * 1452;
-        float dq_kp = 5;  //cl_bw * L;
-        float dq_ki = 100; //cl_bw * Rs;
+        float cl_bw = _2PI * 500;
+        float dq_kp = 5;  //cl_bw * L; // about 0.02
+        float dq_ki = 30; //cl_bw * Rs;
 
         telemetry->DEBUG("DQ KP: " + String(dq_kp, 7));
         telemetry->DEBUG("DQ KI: " + String(dq_ki, 7));
+
 
         // Must not be pointers!
         PIDController d_pid =
@@ -839,7 +864,7 @@ namespace Maxwell {
 
         PIDController velocity_pid =
             PIDController(  0.01,
-                            0.5,
+                            1.0,
                             0.0,
                             0.0,
                             limits.max_current,
@@ -848,7 +873,7 @@ namespace Maxwell {
         PIDController position_pid =
             PIDController(  20,
                             0,
-                            0.0,
+                            0.01,
                             0.0,
                             limits.max_velocity,
                             limits.max_velocity);
@@ -867,8 +892,13 @@ namespace Maxwell {
         float v_d_ff_bemf = 0.0;
         bool using_bemf_estimate = false;
         float max_abs_angle = 0.0;
+        uint32_t last_pos_vel_update = 0;
+        uint32_t start = 0;
+        uint32_t end = 0;
         uint32_t prev_millis = millis();
         uint32_t prev_micros = micros();
+        float loop_frequency = 1;
+        float pos_vel_loop_rate = 2500.0;
         while (true) { // Master control loop
             // For all control cases, the following things are read/measured at the start of the loop:
             uint32_t current_time_ms = millis();
@@ -877,88 +907,49 @@ namespace Maxwell {
             reference = foc.input_lpf->update(reference, current_time_us);  // Filter command
             reference = motor_direction * reference; // Apply motor direction from config
             //float Ts = (current_time_us - prev_micros) * 1e-6;
+            // supply_voltage_watchdog();
 
             // Pure encoder
             encoder->update();
             angle = encoder->get_angle();
             update_observer(angle, current_time_us);
-            velocity = foc.velocity_lpf->update(velocity, current_time_us);
-
-            // estimate_flux_angle(current_time_us);
-
-            // // Pure encoder control
-            // encoder->update();
-            // angle = encoder->get_angle();
-
-            // estimate_flux_angle(current_time_us);
-            // max_abs_angle = max(max_abs_angle, abs(angle));
-            // Blended transition to higher speed
-            // if (abs(velocity) < use_flux_thresh_1) {
-            //     encoder->update();
-            //     angle = encoder->get_angle();
-            //     // Use encoder as angle estimate
-            //     absolute_flux_angle = angle; // Update bemf estimator
-            //     estimate_flux_angle(current_time_us);
-            // }
-            // else if (use_flux_thresh_1 <= abs(velocity) && abs(velocity) < use_flux_thresh_2) {
-            //     encoder->update();
-            //     // At mid speeds, use a linear blend of encoder and bemf estimate
-            //     float alpha = (abs(velocity) - use_flux_thresh_1) / (use_flux_thresh_2 - use_flux_thresh_1);
-            //     estimate_flux_angle(current_time_us);
-            //     angle = (1-alpha)*encoder->absolute_angle + alpha*absolute_flux_angle;
-            // }
-            // else {
-            //     // At higher speeds, use bemf estimate
-            //     angle = estimate_flux_angle(current_time_us);
-            //     encoder->absolute_angle = absolute_flux_angle; // Keep encoder count up to date
-            // }
-
-            //Sanitise the angle
-            // if (isnan(angle) | isinf(angle)) {
-            //     angle = prev_angle;
-            //     String inf_or_nan = (isnan(angle)) ? "NAN" : "INF";
-            //     telemetry->DEBUG("Angle is " + inf_or_nan + "! Reverting to previous angle: " + String(angle));
-            // }
-            // prev_angle = angle; // Else just use the angle
-
-            // Update the observer for velocity prediction
-            // update_observer(angle, current_time_us);
-            // prev_velocity = velocity;
-
-            // velocity = encoder->get_velocity();
             // velocity = foc.velocity_lpf->update(velocity, current_time_us);
 
-            // switch control mode to generate correct torque reference for the torque control loop
-            switch (config.control_mode) {
-                case (CONTROL_MODE::TORQUE): {
-                    // Direct torque control - reference is directly obtained from command source
-                    torque_reference = reference *
-                        ((config.torque_control_mode== TORQUE_CONTROL_MODE::VOLTAGE) ?
-                            limits.max_voltage : limits.max_current);
-                    break;
-                };
-                case (CONTROL_MODE::VELOCITY): {
-                    vel_ref = reference * limits.max_velocity;
-                    velocity_pid.set_setpoint(vel_ref);
-                    torque_reference = velocity_pid.update(velocity);
-                    break;
-                };
-                case (CONTROL_MODE::POSITION) : {
-                    if (pos_homed) {
-                        pos_ref = reference * limits.max_position + homed_position_offset + 0.5 * motor_direction;
-                    }
-                    else {
-                        homing_theta -= (motor_direction * 0.003);
-                        pos_ref = homing_theta;
-                    }
+            // if ((last_pos_vel_update - current_time_us)*1e-6 >= (1/pos_vel_loop_rate))
+            { // Position and velocity loop
+                last_pos_vel_update = current_time_us;
+                // switch control mode to generate correct torque reference for the torque control loop
+                switch (config.control_mode) {
+                    case (CONTROL_MODE::TORQUE): {
+                        // Direct torque control - reference is directly obtained from command source
+                        torque_reference = reference *
+                            ((config.torque_control_mode== TORQUE_CONTROL_MODE::VOLTAGE) ?
+                                limits.max_voltage : limits.max_current);
+                        break;
+                    };
+                    case (CONTROL_MODE::VELOCITY): {
+                        vel_ref = reference * limits.max_velocity;
+                        velocity_pid.set_setpoint(vel_ref);
+                        torque_reference = velocity_pid.update(velocity);
+                        break;
+                    };
+                    case (CONTROL_MODE::POSITION) : {
+                        if (pos_homed) {
+                            pos_ref = reference * limits.max_position + homed_position_offset + 0.5 * motor_direction;
+                        }
+                        else {
+                            homing_theta -= (motor_direction * 0.003);
+                            pos_ref = homing_theta;
+                        }
 
-                    position_pid.set_setpoint(pos_ref);
-                    vel_ref = position_pid.update(angle);
-                    velocity_pid.set_setpoint(vel_ref);
-                    torque_reference = velocity_pid.update(velocity);
-                    break;
-                };
-                default: break;
+                        position_pid.set_setpoint(pos_ref);
+                        vel_ref = position_pid.update(angle);
+                        velocity_pid.set_setpoint(vel_ref);
+                        torque_reference = velocity_pid.update(velocity);
+                        break;
+                    };
+                    default: break;
+                }
             }
 
             // All control modes use torque control
@@ -989,8 +980,8 @@ namespace Maxwell {
                     q_pid.set_setpoint(I_q);
 
 
-
                     adc->read();
+
                     // // Measure current and transform
                     foc.phase_current_meas = adc->get_phase_currents();
                     // foc.phase_voltage_meas = adc->get_phase_voltages();
@@ -998,7 +989,7 @@ namespace Maxwell {
                     foc.dq_meas = park_transform(foc.ab_meas, angle);
 
                     if (config.control_mode == POSITION and !pos_homed) {
-                        if (abs(foc.dq_meas.q) > 7.0) {
+                        if (abs(foc.dq_meas.q) > 5.0) {
                             pos_homed = true;
                             homed_position_offset = angle;
                             telemetry->DEBUG("Position homed! Offset: " + String(homed_position_offset));
@@ -1008,6 +999,7 @@ namespace Maxwell {
                     // Filter measured currents
                     foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
                     foc.dq_meas.q = foc.q_lpf->update(foc.dq_meas.q, current_time_us);
+
 
                     // // Update PID controllers
                     foc.command_dq.d = d_pid.update(foc.dq_meas.d);
@@ -1020,8 +1012,9 @@ namespace Maxwell {
                     v_q_ff = w_e * Ld * foc.dq_meas.d;  // Q axis feedforward voltage
                     v_d_ff_bemf = w_e * flux_linkage; // BEMF decoupling - can add in ??
                     // Add feedforward
-                    foc.command_dq.d += v_d_ff;
-                    foc.command_dq.q += v_q_ff;
+                    // foc.command_dq.d += v_d_ff;
+                    // foc.command_dq.q += v_q_ff;
+
 
 
                     // // Generate voltage command from PID output
@@ -1031,15 +1024,16 @@ namespace Maxwell {
                 }
                 default: break;
             }
+
             uint32_t end_time_us = micros();
-            float loop_frequency = 1/((end_time_us - current_time_us)/1000000.0);
-            if (current_time_ms - prev_millis >= 50) {
+            loop_frequency = (loop_frequency * 4 + 1/((end_time_us - current_time_us)*1e-6)) /5;
+            if (current_time_ms - prev_millis >= 30) {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
-                // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, encoder->absolute_angle}});
-
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::BUS_VOLTAGE, {input_voltage}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity, deriv_velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
                                                                                 static_cast<float>(foc.phase_current_meas.current_b),
                                                                                 static_cast<float>(foc.phase_current_meas.current_c)}});
@@ -1058,6 +1052,7 @@ namespace Maxwell {
                                                                                                     0.0,
                                                                                                     torque_reference}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::GENERAL, {loop_frequency}});
+                // telemetry->DEBUG(end-start);
                 // telemetry->DEBUG(String(angle) + " / " + String(absolute_flux_angle) + " / " + String(encoder->absolute_angle));
                 // telemetry->DEBUG(digitalRead(DRV8323_MOTOR_FAULT_PIN));
                 // telemetry->DEBUG(String(driver->get_fault_status_1_string()) + " / " + String(driver->get_fault_status_2_string()));

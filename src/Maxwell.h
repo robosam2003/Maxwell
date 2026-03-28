@@ -27,6 +27,7 @@
 #include "CommandSource.h"
 #include "CANBus.h"
 #include "ConfigManager.h"
+#include "commands.h"
 
 
 namespace Maxwell {
@@ -37,7 +38,7 @@ namespace Maxwell {
             COMMAND_SOURCE::PWM,
             TELEMETRY_TARGET::TELEMETRY_USB,
             MOTOR_TYPE::BLDC,
-            CONTROL_MODE::POSITION,
+            CONTROL_MODE::TORQUE,
             SENSOR_TYPE::MAGNETIC,
             TORQUE_CONTROL_MODE::CURRENT,
             SENSOR_LOCATION::EXTERNAL_PORT,
@@ -49,7 +50,7 @@ namespace Maxwell {
             {20, 0, 0, limits.max_velocity, limits.max_velocity},
             {true, 2.0},
             {true, 2.0},
-            {false, 1000.0},
+            {true, 10.0},
             {true, 10.0}
         };
     public:
@@ -73,22 +74,27 @@ namespace Maxwell {
         bool pos_homed = true;
         float homed_position_offset = 0.0;
         FOC foc;
-        float input_voltage = 24.0;
+        float min_voltage = 12.0; //
         limits_struct limits = { // Absorb into config struct?
-            .max_voltage = 12.0,
+            .max_voltage = 23.0,
             .max_current = 2.0,
             .align_voltage = 1.5,
-            .max_velocity = 300.0, // in radians per second
+            .max_velocity = 350.0, // in radians per second
             .max_position = _2PI * 70/2 // 50mm stroke, with 2mm lead
         };
+
         // Motor params
         float kv_rating = 330;
-        float flux_linkage = (1/kv_rating) * 60 / (2 * PI); // use kv_rating
+        float flux_linkage = (1/(_SQRT3*kv_rating)) * 60 / (2 * PI); // use kv_rating
         float Rs = 90e-3;
-        float L  = 222e-6; // Average of Ld and Lq
-        float Ld = 186e-6;
-        float Lq = 257e-6;
+        // float L  = 222e-6; // Average of Ld and Lq
+        float L = 18.5e-6;
+        // Measured L value: 12-22uH
+        float Ld = 12e-6;
+        float Lq = 25e-6;
 
+        // Observer params
+        float prev_angle = 0.0;
         float prev_velocity = 0.0;
         float velocity = 0.0;
         float deriv_velocity = 0.0;
@@ -108,11 +114,12 @@ namespace Maxwell {
 
 
 
-
         MOTOR_DIRECTION motor_direction = MOTOR_DIRECTION::CW;
         pwm_3x_struct* pwm_3x;
         uint32_t pwm_frequency = 20000;
         // float align_voltage = 2; // V
+        float input_voltage = 24.0;
+        bool driver_active = false;
         float offset = 0.1; // V
         int _csa_gain = 20;
 
@@ -139,6 +146,8 @@ namespace Maxwell {
         void all_off();
 
         void sensor_offset_calibration();
+
+        bool supply_voltage_watchdog();
 
         float find_resistance(float voltage);
 

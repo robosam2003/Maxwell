@@ -7,6 +7,7 @@
 
 PWMInput::PWMInput(int input_pin, INPUT_MODE input_mode, DIRECTION direction) {
     _input_pin = input_pin;
+    pinMode(_input_pin, INPUT);
     _input_mode = input_mode;
     _direction = direction;
     prev_rise_time = micros();
