@@ -38,7 +38,7 @@ namespace Maxwell {
             COMMAND_SOURCE::PWM,
             TELEMETRY_TARGET::TELEMETRY_USB,
             MOTOR_TYPE::BLDC,
-            CONTROL_MODE::TORQUE,
+            CONTROL_MODE::VELOCITY,
             SENSOR_TYPE::MAGNETIC,
             TORQUE_CONTROL_MODE::CURRENT,
             SENSOR_LOCATION::EXTERNAL_PORT,
@@ -51,7 +51,7 @@ namespace Maxwell {
             {true, 2.0},
             {true, 2.0},
             {true, 10.0},
-            {true, 10.0}
+            {true, 2.0}
         };
     public:
         DRV8323::DRV8323* driver;
@@ -77,15 +77,15 @@ namespace Maxwell {
         float min_voltage = 12.0; //
         limits_struct limits = { // Absorb into config struct?
             .max_voltage = 23.0,
-            .max_current = 2.0,
+            .max_current = 7.0,
             .align_voltage = 1.5,
-            .max_velocity = 350.0, // in radians per second
-            .max_position = _2PI * 70/2 // 50mm stroke, with 2mm lead
+            .max_velocity = 400.0, // in radians per second
+            .max_position = _2PI * 68/2 // 50mm stroke, with 2mm lead
         };
 
         // Motor params
         float kv_rating = 330;
-        float flux_linkage = (1/(_SQRT3*kv_rating)) * 60 / (2 * PI); // use kv_rating
+        float flux_linkage = 60.0f / (2 * PI * _SQRT3*kv_rating * config.pole_pairs); // use kv_rating
         float Rs = 90e-3;
         // float L  = 222e-6; // Average of Ld and Lq
         float L = 18.5e-6;
@@ -97,6 +97,7 @@ namespace Maxwell {
         float prev_angle = 0.0;
         float prev_velocity = 0.0;
         float velocity = 0.0;
+        float pll_velocity = 0.0;
         float deriv_velocity = 0.0;
         float theta = 0.0;
         float theta_est = 0.0;
@@ -141,7 +142,7 @@ namespace Maxwell {
 
         void set_phase_voltages(const dq_struct &command_dq);
 
-        void set_phase_voltages(const dq_struct &command_dq, float theta);
+        void set_phase_voltages(const dq_struct &command_dq, float electrical_theta);
 
         void all_off();
 

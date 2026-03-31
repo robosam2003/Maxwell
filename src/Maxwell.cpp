@@ -377,15 +377,16 @@ namespace Maxwell {
 
     void Maxwell::set_phase_voltages(const dq_struct &command_dq) {
         encoder->update();
-        ab_struct command_ab = reverse_park_transform(command_dq, encoder->get_angle());
+        float electrical_theta = encoder->get_angle() * config.pole_pairs;
+        ab_struct command_ab = reverse_park_transform(command_dq, electrical_theta);
         PhaseVoltages command_voltages = reverse_clarke_transform(command_ab);
         set_phase_voltages(command_voltages.voltage_a,
                             command_voltages.voltage_b,
                             command_voltages.voltage_c);
     }
 
-    void Maxwell::set_phase_voltages(const dq_struct &command_dq, float theta) {
-        ab_struct command_ab = reverse_park_transform(command_dq, theta / POLE_PAIRS_6374);
+    void Maxwell::set_phase_voltages(const dq_struct &command_dq, float electrical_theta) {
+        ab_struct command_ab = reverse_park_transform(command_dq, electrical_theta);
         PhaseVoltages command_voltages = reverse_clarke_transform(command_ab);
         set_phase_voltages(command_voltages.voltage_a,
                             command_voltages.voltage_b,
@@ -708,23 +709,31 @@ namespace Maxwell {
             // // This is proportional to 2 times the error
             // float two_error = (_sin(angle_meas) * _cos(theta_est)) - (_cos(angle_meas) * _sin(theta_est));
 
+            float omega_n = 25; // rad/s - Natural frequency
+            float zeta = 2.0; // Damping ratio (critically damped)
+
             // Lightweight PID:
-            float Kp = 100.0;
-            float Ki = 1000.0;
+            float Kp = 2.0f * zeta * omega_n;
+            float Ki = SQ(omega_n);
             float error = angle_meas - theta_est;
 
             integral_observer += error * Ki * Ts;
-            velocity = Kp * error + integral_observer;
+            pll_velocity = Kp * error + integral_observer;
 
             deriv_velocity = (angle_meas - prev_angle) / Ts;
             prev_angle = angle_meas;
 
             deriv_velocity = foc.velocity_lpf->update(deriv_velocity, current_time_us);
 
+            float alpha = 0.5; // Blending factor between the observer and the derivative
+
+            velocity = pll_velocity;
+
             // // Select deriv_velocity
             // velocity = deriv_velocity;
             // angle_observer.set_setpoint(angle_meas);
             // float omega = angle_observer.update(theta_est);
+
 
             // Theta est is the integral of the estimated velocity
             theta_est += (velocity * Ts);
@@ -814,6 +823,7 @@ namespace Maxwell {
 
     void Maxwell::motor_control() {
         // motor_calibration();
+        flux_linkage = 60.0f / (2 * PI * _SQRT3*kv_rating * config.pole_pairs); // use kv_rating
 
         // Interpret the current config, and call the relevant control loop (e.g. sinusoidal position control, voltage control, current control etc.)
         switch (config.motor_type) {
@@ -852,19 +862,19 @@ namespace Maxwell {
                                     dq_ki,
                                     0.0,
                                     0.0,
-                                    limits.max_voltage,
-                                    limits.max_voltage/20);
+                                    limits.max_voltage/2,
+                                    limits.max_voltage/2);
         PIDController q_pid =
             PIDController(  dq_kp,
                             dq_ki,
                             0.0,
                             0.0,
-                            limits.max_voltage,
-                            limits.max_voltage/20);
+                            limits.max_voltage/2,
+                            limits.max_voltage/2);
 
         PIDController velocity_pid =
             PIDController(  0.01,
-                            1.0,
+                            0.5,
                             0.0,
                             0.0,
                             limits.max_current,
@@ -884,12 +894,13 @@ namespace Maxwell {
         float homing_theta = 0.0;
         float prev_angle = 0.0;
         float angle = 0.0;
+        float elec_angle = 0.0;
         float encoder_angle = 0.0;
         float use_flux_thresh_1 = 50.0;
         float use_flux_thresh_2 = 100.0;
         float v_d_ff = 0.0;
         float v_q_ff = 0.0;
-        float v_d_ff_bemf = 0.0;
+        float v_q_ff_bemf = 0.0;
         bool using_bemf_estimate = false;
         float max_abs_angle = 0.0;
         uint32_t last_pos_vel_update = 0;
@@ -898,7 +909,7 @@ namespace Maxwell {
         uint32_t prev_millis = millis();
         uint32_t prev_micros = micros();
         float loop_frequency = 1;
-        float pos_vel_loop_rate = 2500.0;
+        float pos_vel_loop_rate = 1000.0;
         while (true) { // Master control loop
             // For all control cases, the following things are read/measured at the start of the loop:
             uint32_t current_time_ms = millis();
@@ -909,13 +920,20 @@ namespace Maxwell {
             //float Ts = (current_time_us - prev_micros) * 1e-6;
             // supply_voltage_watchdog();
 
+            //
+
+
+
             // Pure encoder
             encoder->update();
             angle = encoder->get_angle();
-            update_observer(angle, current_time_us);
-            // velocity = foc.velocity_lpf->update(velocity, current_time_us);
+            elec_angle = angle * config.pole_pairs;
+            estimate_flux_angle(current_time_us);
 
-            // if ((last_pos_vel_update - current_time_us)*1e-6 >= (1/pos_vel_loop_rate))
+            update_observer(angle, current_time_us);
+            float w_e = velocity * config.pole_pairs; // Electrical angular velocity
+
+            if ((last_pos_vel_update - current_time_us)*1e-6 >= (1/pos_vel_loop_rate))
             { // Position and velocity loop
                 last_pos_vel_update = current_time_us;
                 // switch control mode to generate correct torque reference for the torque control loop
@@ -935,7 +953,7 @@ namespace Maxwell {
                     };
                     case (CONTROL_MODE::POSITION) : {
                         if (pos_homed) {
-                            pos_ref = reference * limits.max_position + homed_position_offset + 0.5 * motor_direction;
+                            pos_ref = reference * limits.max_position + homed_position_offset + _2PI * motor_direction;
                         }
                         else {
                             homing_theta -= (motor_direction * 0.003);
@@ -958,14 +976,14 @@ namespace Maxwell {
                     // TORQUE CONTROL, with TORQUE CONTROL MODE
 
                     float U_q = torque_reference; // In voltage control mode, the torque reference is directly the q-axis voltage
-                    set_phase_voltages({0, U_q}, angle*POLE_PAIRS_6374);
+                    set_phase_voltages({0, U_q}, elec_angle);
                     adc->read();
 
                     // // Measure current and transform
                     foc.phase_current_meas = adc->get_phase_currents();
                     foc.phase_voltage_meas = adc->get_phase_voltages();
                     foc.ab_meas = clarke_transform(foc.phase_current_meas);
-                    foc.dq_meas = park_transform(foc.ab_meas, angle);
+                    foc.dq_meas = park_transform(foc.ab_meas, elec_angle);
 
                     // Filter measured currents
                     foc.dq_meas.d = foc.d_lpf->update(foc.dq_meas.d, current_time_us);
@@ -979,6 +997,9 @@ namespace Maxwell {
                     d_pid.set_setpoint(0.0);
                     q_pid.set_setpoint(I_q);
 
+                    // Generate lead compensated phase angle
+                    float dt = 1/loop_frequency;
+                    float interpolated_phase = elec_angle + w_e * dt * 1.5;
 
                     adc->read();
 
@@ -986,10 +1007,10 @@ namespace Maxwell {
                     foc.phase_current_meas = adc->get_phase_currents();
                     // foc.phase_voltage_meas = adc->get_phase_voltages();
                     foc.ab_meas = clarke_transform(foc.phase_current_meas);
-                    foc.dq_meas = park_transform(foc.ab_meas, angle);
+                    foc.dq_meas = park_transform(foc.ab_meas, interpolated_phase);
 
                     if (config.control_mode == POSITION and !pos_homed) {
-                        if (abs(foc.dq_meas.q) > 5.0) {
+                        if (abs(foc.dq_meas.q) > 7.0) {
                             pos_homed = true;
                             homed_position_offset = angle;
                             telemetry->DEBUG("Position homed! Offset: " + String(homed_position_offset));
@@ -1004,21 +1025,20 @@ namespace Maxwell {
                     // // Update PID controllers
                     foc.command_dq.d = d_pid.update(foc.dq_meas.d);
                     foc.command_dq.q = q_pid.update(foc.dq_meas.q);
-                    foc.command_ab = reverse_park_transform(foc.command_dq, angle);
+                    foc.command_ab = reverse_park_transform(foc.command_dq, interpolated_phase);
 
                     // calculate decoupling:
-                    float w_e = velocity * config.pole_pairs; // Electrical angular velocity
                     v_d_ff = -w_e * Lq * foc.dq_meas.q; // D axis feedforward voltage
                     v_q_ff = w_e * Ld * foc.dq_meas.d;  // Q axis feedforward voltage
-                    v_d_ff_bemf = w_e * flux_linkage; // BEMF decoupling - can add in ??
+                    v_q_ff_bemf = w_e * flux_linkage; // BEMF decoupling - can add in ??
                     // Add feedforward
-                    // foc.command_dq.d += v_d_ff;
-                    // foc.command_dq.q += v_q_ff;
+                    foc.command_dq.d += v_d_ff;
+                    foc.command_dq.q += v_q_ff + v_q_ff_bemf;
 
 
 
                     // // Generate voltage command from PID output
-                    set_phase_voltages(foc.command_dq, angle*POLE_PAIRS_6374);
+                    set_phase_voltages(foc.command_dq, interpolated_phase);
 
                     break;
                 }
@@ -1031,7 +1051,7 @@ namespace Maxwell {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
                 telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, encoder->absolute_angle}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, encoder->absolute_angle, theta_est}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::BUS_VOLTAGE, {input_voltage}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity, deriv_velocity}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
@@ -1046,7 +1066,7 @@ namespace Maxwell {
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS,
                 //         {static_cast<float>(Psi_alpha),
                 //             static_cast<float>(Psi_beta)}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS, {v_d_ff, v_q_ff, v_d_ff_bemf}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS, {v_d_ff, v_q_ff, v_q_ff_bemf}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
                                                                                                 static_cast<float>(foc.dq_meas.q),
                                                                                                     0.0,

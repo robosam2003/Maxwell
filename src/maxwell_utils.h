@@ -95,17 +95,17 @@ inline ab_struct clarke_transform(const PhaseCurrents &currents) { // currents t
 }
 
 
-inline dq_struct park_transform(const ab_struct &ab_vec, float theta) { // alpha-beta to dq
+inline dq_struct park_transform(const ab_struct &ab_vec, float electrical_theta) { // alpha-beta to dq
     // the park transform
-    float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
+    // float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
     float d = ab_vec.alpha * _cos(electrical_theta)  + ab_vec.beta * _sin(electrical_theta);
     float q = -ab_vec.alpha * _sin(electrical_theta) + ab_vec.beta * _cos(electrical_theta);
     dq_struct dq = {d, q};
     return dq;
 }
 
-inline ab_struct reverse_park_transform(const dq_struct &dq_vec, float theta) {  // dq to alpha-beta
-    float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
+inline ab_struct reverse_park_transform(const dq_struct &dq_vec, float electrical_theta) {  // dq to alpha-beta
+    // float electrical_theta = theta * POLE_PAIRS_6374; // Assuming we're aligned with the encoder!
     double c = _cos(electrical_theta);
     double s = _sin(electrical_theta);
     float alpha = dq_vec.d * c - dq_vec.q * s;

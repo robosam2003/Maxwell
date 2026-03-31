@@ -7,27 +7,32 @@
 #include "stm32f4xx_hal_flash.h"
 
 
-// Maxwell::Maxwell maxwell;
-PWMInput pwm_input = PWMInput(PWM_IN_PIN, UNIDIRECTIONAL, FORWARD);
+Maxwell::Maxwell maxwell;
+// SPIClass SPI_2(PC3, PC2, PB10); // MOSI, MISO, SCK
+//
+// AS5047P encoder(
+//     AS5048A_CS_PIN,
+//     SPI_2,
+//     1000000); // 1 MHz SPI frequency
 
 
 void setup() {
     delay(500);
 
-    // maxwell.setup();
+    maxwell.setup();
     // // maxwell.init_pwm_3x();
     // // maxwell.set_phase_voltages(0, 0, 0);
-    // // maxwell.adc->calibrate_current_offsets();
-    // maxwell.driver->clear_fault();
+    maxwell.adc->calibrate_current_offsets();
+    maxwell.driver->clear_fault();
 }
 
 
 void loop() {
     // Serial.println(maxwell.driver->read_reg(DRV8323::DRIVER_CONTROL), HEX);
     // delay(10);
-    // // maxwell.motor_control();
-    Serial.println(pwm_input.read_percentage());
-    delay(100);
+    maxwell.motor_control();
+    // Serial.println(pwm_input.read_percentage());
+    // delay(100);
     // maxwell.motor_control();
     // maxwell.adc->read();
     // Serial.println("Supply Voltage: " + String(maxwell.adc->get_supply_voltage()));
@@ -35,7 +40,10 @@ void loop() {
 
     //
     // maxwell.encoder->update();
-    // Serial.println(maxwell.encoder->get_angle());
+    // encoder.update();
+    // Serial.println("Angle: " + String(encoder.absolute_angle));
+    // delay(10);
+
 }
 
 
