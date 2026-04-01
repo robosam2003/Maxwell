@@ -3,6 +3,7 @@
 //
 
 #include "Arduino.h"
+#include "stm32f4xx_hal_adc.h"
 #include "../RCFilter/RCFilter.h"
 #include "../../include/config.h"
 #include "../../include/pin_definitions.h"

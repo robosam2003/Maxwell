@@ -24,7 +24,7 @@ public:
      * @param current_time_us
      * @return The filtered output.
      */
-    double update(double input, unsigned long current_time_us);
+    float update(float input, unsigned long current_time_us);
 
     // copy constructors
     RCFilter(const RCFilter& other);

@@ -133,7 +133,7 @@
 #define CS_SDA2_RX3_EXTI_PIN        PB11
 #define SCK2_SCL2_TX3_EXTI_PIN      PB10
 
-
+#define SPARE_PIN                   PC12
 
 
 #endif

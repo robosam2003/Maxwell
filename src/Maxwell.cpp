@@ -91,6 +91,9 @@ namespace Maxwell {
         pwm_3x = new pwm_3x_struct();
         encoder->_direction = SENSOR_DIRECTION::CW; // Confirmed via testing
 
+        pinMode(SPARE_PIN, OUTPUT);
+        digitalWrite(SPARE_PIN, HIGH);
+
         instance = this;
     }
 
@@ -203,11 +206,9 @@ namespace Maxwell {
         pwm_3x->TIM_A->setMode(pwm_3x->channel_a, PWM_MODE, pin_a);
         pwm_3x->TIM_A->getHandle()->Init.CounterMode = COUNTER_MODE;
         pwm_3x->TIM_A->getHandle()->Init.RepetitionCounter = 1;
-        // pwm_3x->TIM_A->getHandle()->Instance->CCR1
-        // Set timer direction
         pwm_3x->TIM_A->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_A->setCaptureCompare(pwm_3x->channel_a, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
-        // pwm_3x->TIM_A->attachInterrupt(Update_A_callback);
+        // pwm_3x->TIM_A->attachInterrupt(adc_trigger_handler);
 
         pwm_3x->TIM_B->setMode(pwm_3x->channel_b, PWM_MODE, pin_b);
         pwm_3x->TIM_B->getHandle()->Init.CounterMode = COUNTER_MODE;
@@ -221,7 +222,7 @@ namespace Maxwell {
         pwm_3x->TIM_C->setOverflow(pwm_3x->FREQ, HERTZ_FORMAT);
         pwm_3x->TIM_C->setCaptureCompare(pwm_3x->channel_c, 0, static_cast<TimerCompareFormat_t>(pwm_3x->RESOLUTION));
 
-        HAL_TIM_Base_Init(pwm_3x->TIM_A->getHandle());;
+        HAL_TIM_Base_Init(pwm_3x->TIM_A->getHandle());
         HAL_TIM_Base_Init(pwm_3x->TIM_B->getHandle());
         HAL_TIM_Base_Init(pwm_3x->TIM_C->getHandle());
 
@@ -677,14 +678,14 @@ namespace Maxwell {
                     prev_flux_angle = absolute_flux_angle * config.pole_pairs - flux_full_elec_rotations * _2PI; // Get the angle within the current electrical rotation
                     // prev_flux_angle = raw_flux_angle;
                     float omega_c = 50.0;
-                    float observer_gain = 20.0;
+                    float observer_gain = 10.0;
 
                     // Integrate the voltage vector to get flux vector
                     Psi_alpha += (foc.command_ab.alpha - Rs*foc.ab_meas.alpha - omega_c*Psi_alpha) * Ts * observer_gain;
                     Psi_beta  += (foc.command_ab.beta -  Rs*foc.ab_meas.beta  - omega_c*Psi_beta ) * Ts * observer_gain;
 
                     // raw_flux_angle = atan2(Psi_beta, Psi_alpha); // Get the angle of the flux vector
-
+                    float L = 200e-6;
                     raw_flux_angle = atan2(Psi_beta - L*foc.ab_meas.beta, Psi_alpha - L*foc.ab_meas.alpha); // Get the angle of the flux vector
                     raw_flux_angle = raw_flux_angle - floor(raw_flux_angle / _2PI) * _2PI; // normalize angle to [0, 2*PI]
 
@@ -710,11 +711,13 @@ namespace Maxwell {
             // float two_error = (_sin(angle_meas) * _cos(theta_est)) - (_cos(angle_meas) * _sin(theta_est));
 
             float omega_n = 25; // rad/s - Natural frequency
-            float zeta = 2.0; // Damping ratio (critically damped)
+            float zeta = 1.5; // Damping ratio (critically damped)
 
             // Lightweight PID:
             float Kp = 2.0f * zeta * omega_n;
             float Ki = SQ(omega_n);
+            // float Kp = 100.0;
+            // float Ki = 300.0;
             float error = angle_meas - theta_est;
 
             integral_observer += error * Ki * Ts;
@@ -728,6 +731,8 @@ namespace Maxwell {
             float alpha = 0.5; // Blending factor between the observer and the derivative
 
             velocity = pll_velocity;
+
+            // velocity = foc.velocity_lpf->update(velocity, current_time_us);
 
             // // Select deriv_velocity
             // velocity = deriv_velocity;
@@ -848,13 +853,9 @@ namespace Maxwell {
         driver->enable(true); // Enable driver in 3x mode
         driver->set_pwm_mode(DRV8323::PWM_MODE::PWM_3x);  // Ensure 3x PWM setup
 
-        float cl_bw = _2PI * 500;
-        float dq_kp = 5;  //cl_bw * L; // about 0.02
-        float dq_ki = 30; //cl_bw * Rs;
-
-        telemetry->DEBUG("DQ KP: " + String(dq_kp, 7));
-        telemetry->DEBUG("DQ KI: " + String(dq_ki, 7));
-
+        float cc_bw = _2PI * 250;
+        float dq_kp = 5; //cc_bw * L; // about 0.02
+        float dq_ki = 30; //cc_bw * Rs;
 
         // Must not be pointers!
         PIDController d_pid =
@@ -874,7 +875,7 @@ namespace Maxwell {
 
         PIDController velocity_pid =
             PIDController(  0.01,
-                            0.5,
+                            1.0,
                             0.0,
                             0.0,
                             limits.max_current,
@@ -888,6 +889,11 @@ namespace Maxwell {
                             limits.max_velocity,
                             limits.max_velocity);
 
+
+        telemetry->DEBUG("DQ KP: " + String(dq_kp, 7));
+        telemetry->DEBUG("DQ KI: " + String(dq_ki, 7));
+
+
         float pos_ref = 0.0;
         float vel_ref = 0.0;
         float torque_reference = 0.0;
@@ -897,7 +903,7 @@ namespace Maxwell {
         float elec_angle = 0.0;
         float encoder_angle = 0.0;
         float use_flux_thresh_1 = 50.0;
-        float use_flux_thresh_2 = 100.0;
+        float use_flux_thresh_2 = 80.0;
         float v_d_ff = 0.0;
         float v_q_ff = 0.0;
         float v_q_ff_bemf = 0.0;
@@ -920,17 +926,35 @@ namespace Maxwell {
             //float Ts = (current_time_us - prev_micros) * 1e-6;
             // supply_voltage_watchdog();
 
-            //
-
-
-
             // Pure encoder
             encoder->update();
             angle = encoder->get_angle();
-            elec_angle = angle * config.pole_pairs;
-            estimate_flux_angle(current_time_us);
 
-            update_observer(angle, current_time_us);
+            // Blended with sensorless
+            // Blended transition to higher speed
+            // if (abs(velocity) < use_flux_thresh_1) {
+            //     encoder->update();
+            //     angle = encoder->get_angle();
+            //     // Use encoder as angle estimate
+            //     absolute_flux_angle = angle; // Update bemf estimator
+            //     estimate_flux_angle(current_time_us);
+            // }
+            // else if (use_flux_thresh_1 <= abs(velocity) && abs(velocity) < use_flux_thresh_2) {
+            //     encoder->update();
+            //     // At mid speeds, use a linear blend of encoder and bemf estimate
+            //     float alpha = (abs(velocity) - use_flux_thresh_1) / (use_flux_thresh_2 - use_flux_thresh_1);
+            //     estimate_flux_angle(current_time_us);
+            //     angle = (1-alpha)*encoder->absolute_angle + alpha*absolute_flux_angle;
+            // }
+            // else {
+            //     // At higher speeds, use bemf estimate
+            //     angle = estimate_flux_angle(current_time_us);
+            //     encoder->absolute_angle = absolute_flux_angle; // Keep encoder count up to date
+            // }
+
+            elec_angle = angle * config.pole_pairs;
+
+            update_observer(angle, current_time_us); // Calculate velocity
             float w_e = velocity * config.pole_pairs; // Electrical angular velocity
 
             if ((last_pos_vel_update - current_time_us)*1e-6 >= (1/pos_vel_loop_rate))
@@ -948,7 +972,7 @@ namespace Maxwell {
                     case (CONTROL_MODE::VELOCITY): {
                         vel_ref = reference * limits.max_velocity;
                         velocity_pid.set_setpoint(vel_ref);
-                        torque_reference = velocity_pid.update(velocity);
+                        torque_reference = velocity_pid.update(velocity, current_time_us);
                         break;
                     };
                     case (CONTROL_MODE::POSITION) : {
@@ -961,9 +985,9 @@ namespace Maxwell {
                         }
 
                         position_pid.set_setpoint(pos_ref);
-                        vel_ref = position_pid.update(angle);
+                        vel_ref = position_pid.update(angle, current_time_us);
                         velocity_pid.set_setpoint(vel_ref);
-                        torque_reference = velocity_pid.update(velocity);
+                        torque_reference = velocity_pid.update(velocity, current_time_us);
                         break;
                     };
                     default: break;
@@ -998,16 +1022,15 @@ namespace Maxwell {
                     q_pid.set_setpoint(I_q);
 
                     // Generate lead compensated phase angle
-                    float dt = 1/loop_frequency;
-                    float interpolated_phase = elec_angle + w_e * dt * 1.5;
+                    // float dt = 1/loop_frequency;
+                    // float interpolated_phase = elec_angle + w_e * dt * 1.5;
 
                     adc->read();
-
                     // // Measure current and transform
                     foc.phase_current_meas = adc->get_phase_currents();
                     // foc.phase_voltage_meas = adc->get_phase_voltages();
                     foc.ab_meas = clarke_transform(foc.phase_current_meas);
-                    foc.dq_meas = park_transform(foc.ab_meas, interpolated_phase);
+                    foc.dq_meas = park_transform(foc.ab_meas, elec_angle);
 
                     if (config.control_mode == POSITION and !pos_homed) {
                         if (abs(foc.dq_meas.q) > 7.0) {
@@ -1023,22 +1046,20 @@ namespace Maxwell {
 
 
                     // // Update PID controllers
-                    foc.command_dq.d = d_pid.update(foc.dq_meas.d);
-                    foc.command_dq.q = q_pid.update(foc.dq_meas.q);
-                    foc.command_ab = reverse_park_transform(foc.command_dq, interpolated_phase);
+                    foc.command_dq.d = d_pid.update(foc.dq_meas.d, current_time_us);
+                    foc.command_dq.q = q_pid.update(foc.dq_meas.q, current_time_us);
+                    foc.command_ab = reverse_park_transform(foc.command_dq, elec_angle);
 
                     // calculate decoupling:
-                    v_d_ff = -w_e * Lq * foc.dq_meas.q; // D axis feedforward voltage
-                    v_q_ff = w_e * Ld * foc.dq_meas.d;  // Q axis feedforward voltage
+                    v_d_ff = -w_e * Lq * I_q; // D axis feedforward voltage
+                    // v_q_ff = w_e * Ld * 0.0;  // Q axis feedforward voltage
                     v_q_ff_bemf = w_e * flux_linkage; // BEMF decoupling - can add in ??
                     // Add feedforward
-                    foc.command_dq.d += v_d_ff;
-                    foc.command_dq.q += v_q_ff + v_q_ff_bemf;
-
-
+                    // foc.command_dq.d += v_d_ff;
+                    // foc.command_dq.q += v_q_ff + v_q_ff_bemf;
 
                     // // Generate voltage command from PID output
-                    set_phase_voltages(foc.command_dq, interpolated_phase);
+                    set_phase_voltages(foc.command_dq, elec_angle);
 
                     break;
                 }
@@ -1049,14 +1070,14 @@ namespace Maxwell {
             loop_frequency = (loop_frequency * 4 + 1/((end_time_us - current_time_us)*1e-6)) /5;
             if (current_time_ms - prev_millis >= 30) {
                 // String a = driver->get_fault_status_1_string() +" / " + driver->get_fault_status_1_string();
-                telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
+                // telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND, {reference}});
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, angle, encoder->theta_est, adc->get_bemf_angle()}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_POSITION, {pos_ref, encoder->absolute_angle, theta_est}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::BUS_VOLTAGE, {input_voltage}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity, deriv_velocity}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
-                                                                                static_cast<float>(foc.phase_current_meas.current_b),
-                                                                                static_cast<float>(foc.phase_current_meas.current_c)}});
+                // telemetry->send({TELEMETRY_PACKET_TYPE::BUS_VOLTAGE, {input_voltage}});
+                telemetry->send({TELEMETRY_PACKET_TYPE::ROTOR_VELOCITY, {vel_ref, velocity}});
+                // telemetry->send({TELEMETRY_PACKET_TYPE::PHASE_CURRENTS, {static_cast<float>(foc.phase_current_meas.current_a),
+                //                                                                 static_cast<float>(foc.phase_current_meas.current_b),
+                //                                                                 static_cast<float>(foc.phase_current_meas.current_c)}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::COMMAND_VOLTAGES, {static_cast<float>(foc.command_dq.d),
                                                                                         static_cast<float>(foc.command_dq.q)}});
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS, {static_cast<float>(foc.ab_meas.alpha),
@@ -1066,7 +1087,7 @@ namespace Maxwell {
                 // telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS,
                 //         {static_cast<float>(Psi_alpha),
                 //             static_cast<float>(Psi_beta)}});
-                telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS, {v_d_ff, v_q_ff, v_q_ff_bemf}});
+                // telemetry->send({TELEMETRY_PACKET_TYPE::ALPHA_BETA_CURRENTS, {v_d_ff, v_q_ff, v_q_ff_bemf}});
                 telemetry->send({TELEMETRY_PACKET_TYPE::DQ_CURRENTS, {static_cast<float>(foc.dq_meas.d),
                                                                                                 static_cast<float>(foc.dq_meas.q),
                                                                                                     0.0,
@@ -1083,14 +1104,9 @@ namespace Maxwell {
                 //                             static_cast<String>(encoder->errors.magnitude));
                 prev_millis = current_time_ms;
             }
+
             prev_micros = current_time_us;
 
         } // End of master control loop
     }
-
-
-
-
-
-
 }

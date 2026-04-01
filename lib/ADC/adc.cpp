@@ -137,6 +137,13 @@ void Adc::setup_injected_adc() {
     HAL_ADCEx_InjectedStart(hadc3);
     HAL_ADCEx_InjectedStart(hadc2);
     HAL_ADCEx_InjectedStart(hadc1);
+
+    // Assuming you are using HAL under the hood for the ADC setup:
+    // HAL_NVIC_SetPriority(ADC_IRQn, 0, 0); // Set highest priority (0)
+    // HAL_NVIC_EnableIRQ(ADC_IRQn);         // Enable the interrupt
+    //
+    // // Enable the "Injected End of Sequence" (JEOS) interrupt on your specific ADC
+    // __HAL_ADC_ENABLE_IT(hadc1, LL_ADC_IT_JEOS);
 }
 
 void Adc::calibrate_current_offsets() {

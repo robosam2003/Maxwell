@@ -38,7 +38,7 @@ namespace Maxwell {
             COMMAND_SOURCE::PWM,
             TELEMETRY_TARGET::TELEMETRY_USB,
             MOTOR_TYPE::BLDC,
-            CONTROL_MODE::VELOCITY,
+            CONTROL_MODE::POSITION,
             SENSOR_TYPE::MAGNETIC,
             TORQUE_CONTROL_MODE::CURRENT,
             SENSOR_LOCATION::EXTERNAL_PORT,
@@ -79,9 +79,10 @@ namespace Maxwell {
             .max_voltage = 23.0,
             .max_current = 7.0,
             .align_voltage = 1.5,
-            .max_velocity = 400.0, // in radians per second
+            .max_velocity = 300.0, // in radians per second
             .max_position = _2PI * 68/2 // 50mm stroke, with 2mm lead
         };
+
 
         // Motor params
         float kv_rating = 330;
@@ -92,6 +93,10 @@ namespace Maxwell {
         // Measured L value: 12-22uH
         float Ld = 12e-6;
         float Lq = 25e-6;
+
+
+
+
 
         // Observer params
         float prev_angle = 0.0;
@@ -167,7 +172,6 @@ namespace Maxwell {
         void motor_control();
 
         void bldc_control();
-
 
 
     };

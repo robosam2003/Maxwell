@@ -16,21 +16,21 @@ RCFilter::RCFilter(double cutoff_freq) {
     filter_enabled = true; // Enabled by default
 }
 
-double RCFilter::update(double input, unsigned long current_time_us) {
+float RCFilter::update(float input, unsigned long current_time_us) {
     if (!filter_enabled) {
         prev_value = input;
         prev_update_time_us = current_time_us;
         return input;
     }
-    double T = (current_time_us - prev_update_time_us) * 1e-6;
+    float T = (current_time_us - prev_update_time_us) * 1e-6;
     prev_update_time_us = current_time_us;
 
     // the two coefficients in the difference equation.
-    double coeff1 = T / (T + RC);
-    double coeff2 = RC / (T + RC);
+    float coeff1 = T / (T + RC);
+    float coeff2 = RC / (T + RC);
 
     // difference equation - using euler's method for discretion.
-    double out = input*coeff1 + prev_value*coeff2;
+    float out = input*coeff1 + prev_value*coeff2;
 
     // update previous value
     prev_value = out;

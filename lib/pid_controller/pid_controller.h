@@ -26,7 +26,7 @@ public:
 
     PIDController(float kp, float ki, float kd, float setpoint, float max_output, float max_integral);
 
-    float update(float input);
+    float update(float input, uint32_t current_time_us);
 
     void set_setpoint(float sp);
 

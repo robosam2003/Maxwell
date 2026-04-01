@@ -20,9 +20,8 @@ void PIDController::set_setpoint(float sp) {
     _setpoint = sp;
 }
 
-float PIDController::update(const float input) {
-    uint32_t current_time = micros();
-    float dt = (current_time - _prev_input_time) / 1e6;
+float PIDController::update(const float input, uint32_t current_time_us) {
+    float dt = (current_time_us - _prev_input_time) / 1e6;
     _error = _setpoint - input;
     // Serial.println((current_time - _prev_input_time) / 1e6);
     _integral += _error * dt;
@@ -32,7 +31,7 @@ float PIDController::update(const float input) {
     _output = _kp * _error + _ki * _integral + _kd * _derivative;
     _output = constrain(_output, -_max_output, _max_output);
     _prev_error = _error;
-    _prev_input_time = current_time;
+    _prev_input_time = current_time_us;
     _prev_input = input;
     return _output;
 }
