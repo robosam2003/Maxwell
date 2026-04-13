@@ -40,8 +40,7 @@ void loop() {
 
     //
     // maxwell.encoder->update();
-    // encoder.update();
-    // Serial.println("Angle: " + String(encoder.absolute_angle));
+    // Serial.println("Angle: " + String(maxwell.encoder->absolute_angle));
     // delay(10);
 
 }

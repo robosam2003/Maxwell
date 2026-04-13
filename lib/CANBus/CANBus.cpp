@@ -18,12 +18,12 @@ CANBus::CANBus(uint32_t baud_rate) {
 }
 
 float CANBus::read() {
-    // Needs implementing
+    if (can->read(rsv_msg)) {
+
+    }
 }
 
 void CANBus::send(const telemetry_packet &packet) {
-    // Needs implementing
-
     CAN_message_t message;
     message.id = 0x01;
     message.len = packet.data.size() * sizeof(float) + 1; // +1 for the packet type

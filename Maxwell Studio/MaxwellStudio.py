@@ -50,7 +50,7 @@ TELEMETRY_PACKET_TYPE = {
 }
 
 com_type = "SERIAL"
-
+com_port = "COM3"
 
 
 @dataclass
@@ -97,7 +97,7 @@ class SerialWorker(QObject):
     packet_received = Signal(str, list)   # name, list_of_floats
     error = Signal(str)
 
-    def __init__(self, port: str = 'COM3', baud: int = 921600, timeout: float = 1.0):
+    def __init__(self, port: str = com_port, baud: int = 921600, timeout: float = 1.0):
         super().__init__()
         self.port = port
         self.baud = baud
